@@ -1,0 +1,174 @@
+{
+  "version": "1.0.0",
+  "services": [
+    {
+      "id": "jarvis-auth",
+      "name": "Auth Service",
+      "description": "JWT authentication with register, login, refresh, and logout",
+      "category": "core",
+      "port": 8007,
+      "image": "ghcr.io/jarvis/jarvis-auth:latest",
+      "healthCheck": "/health",
+      "dependsOn": ["postgres"],
+      "envVars": [
+        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
+        { "name": "SECRET_KEY", "description": "JWT signing key", "required": true, "secret": true }
+      ]
+    },
+    {
+      "id": "jarvis-command-center",
+      "name": "Command Center",
+      "description": "Central voice/command API, node management, and tool routing",
+      "category": "core",
+      "port": 8002,
+      "image": "ghcr.io/jarvis/jarvis-command-center:latest",
+      "healthCheck": "/health",
+      "dependsOn": ["postgres", "jarvis-auth", "jarvis-whisper"],
+      "envVars": [
+        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
+        { "name": "ADMIN_API_KEY", "description": "Admin endpoint protection", "required": true, "secret": true },
+        { "name": "JARVIS_AUTH_BASE_URL", "description": "Auth service URL", "required": true, "default": "http://jarvis-auth:8007" }
+      ]
+    },
+    {
+      "id": "jarvis-whisper",
+      "name": "Whisper STT",
+      "description": "Speech-to-text via whisper.cpp",
+      "category": "core",
+      "port": 8012,
+      "image": "ghcr.io/jarvis/jarvis-whisper-api:latest",
+      "healthCheck": "/health",
+      "dependsOn": [],
+      "envVars": []
+    },
+    {
+      "id": "jarvis-tts",
+      "name": "Text-to-Speech",
+      "description": "Text-to-speech synthesis for voice responses",
+      "category": "core",
+      "port": 8009,
+      "image": "ghcr.io/jarvis/jarvis-tts:latest",
+      "healthCheck": "/health",
+      "dependsOn": [],
+      "envVars": []
+    },
+    {
+      "id": "jarvis-logs",
+      "name": "Logging Service",
+      "description": "Centralized logging for all Jarvis services",
+      "category": "core",
+      "port": 8006,
+      "image": "ghcr.io/jarvis/jarvis-logs:latest",
+      "healthCheck": "/health",
+      "dependsOn": ["loki"],
+      "envVars": [
+        { "name": "LOKI_URL", "description": "Loki push endpoint", "required": true, "default": "http://loki:3100" }
+      ]
+    },
+    {
+      "id": "jarvis-config-service",
+      "name": "Config Service",
+      "description": "Centralized configuration and service discovery",
+      "category": "core",
+      "port": 8013,
+      "image": "ghcr.io/jarvis/jarvis-config-service:latest",
+      "healthCheck": "/health",
+      "dependsOn": ["postgres"],
+      "envVars": [
+        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true }
+      ]
+    },
+    {
+      "id": "jarvis-mcp",
+      "name": "MCP Server",
+      "description": "Model Context Protocol server for AI tool integration",
+      "category": "core",
+      "port": 8011,
+      "image": "ghcr.io/jarvis/jarvis-mcp:latest",
+      "healthCheck": "/health",
+      "dependsOn": ["jarvis-logs"],
+      "envVars": []
+    },
+    {
+      "id": "jarvis-admin",
+      "name": "Admin Dashboard",
+      "description": "Web-based admin interface for managing the Jarvis stack",
+      "category": "core",
+      "port": 3000,
+      "image": "ghcr.io/jarvis/jarvis-admin:latest",
+      "healthCheck": "/health",
+      "dependsOn": ["jarvis-auth", "jarvis-command-center"],
+      "envVars": []
+    },
+    {
+      "id": "jarvis-ocr-service",
+      "name": "OCR Service",
+      "description": "Optical character recognition with pluggable backends (Tesseract, EasyOCR, Apple Vision)",
+      "category": "optional",
+      "port": 5009,
+      "image": "ghcr.io/jarvis/jarvis-ocr-service:latest",
+      "healthCheck": "/health",
+      "dependsOn": [],
+      "envVars": [
+        { "name": "JARVIS_AUTH_BASE_URL", "description": "Auth service URL for validation", "required": true, "default": "http://jarvis-auth:8007" }
+      ]
+    },
+    {
+      "id": "jarvis-recipes",
+      "name": "Recipes Service",
+      "description": "Recipe CRUD, URL parsing, and meal planning",
+      "category": "optional",
+      "port": 8001,
+      "image": "ghcr.io/jarvis/jarvis-recipes-server:latest",
+      "healthCheck": "/health",
+      "dependsOn": ["postgres", "jarvis-ocr-service"],
+      "envVars": [
+        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true }
+      ]
+    }
+  ],
+  "infrastructure": [
+    {
+      "id": "postgres",
+      "name": "PostgreSQL",
+      "description": "Relational database for auth, command-center, recipes, and config",
+      "image": "postgres:16-alpine",
+      "port": 5432,
+      "envVars": [
+        { "name": "POSTGRES_USER", "description": "Database user", "required": true, "default": "jarvis" },
+        { "name": "POSTGRES_PASSWORD", "description": "Database password", "required": true, "secret": true },
+        { "name": "POSTGRES_DB", "description": "Database name", "required": true, "default": "jarvis" }
+      ],
+      "volumes": ["jarvis-postgres-data:/var/lib/postgresql/data"]
+    },
+    {
+      "id": "redis",
+      "name": "Redis",
+      "description": "In-memory cache and message broker",
+      "image": "redis:7-alpine",
+      "port": 6379,
+      "envVars": [],
+      "volumes": ["jarvis-redis-data:/data"]
+    },
+    {
+      "id": "loki",
+      "name": "Loki",
+      "description": "Log aggregation backend",
+      "image": "grafana/loki:2.9.0",
+      "port": 3100,
+      "envVars": [],
+      "volumes": ["jarvis-loki-data:/loki"]
+    },
+    {
+      "id": "grafana",
+      "name": "Grafana",
+      "description": "Monitoring and log visualization dashboard",
+      "image": "grafana/grafana:latest",
+      "port": 3001,
+      "envVars": [
+        { "name": "GF_SECURITY_ADMIN_PASSWORD", "description": "Grafana admin password", "required": true, "secret": true, "default": "jarvis" }
+      ],
+      "volumes": ["jarvis-grafana-data:/var/lib/grafana"]
+    }
+  ]
+}
