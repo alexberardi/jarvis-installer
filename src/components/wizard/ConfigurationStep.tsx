@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useWizard } from "@/context/WizardContext";
-import { parseRegistry, getCoreServices, getOptionalServices, getRequiredInfrastructure } from "@/lib/service-registry";
+import { parseRegistry, getCoreServices, getRecommendedServices, getOptionalServices, getRequiredInfrastructure } from "@/lib/service-registry";
 import { generateAllSecrets } from "@/lib/secret-generator";
 import { detectPortConflicts, buildPortEntries, serviceIdToPortVar } from "@/lib/port-utils";
 import type { ServiceRegistry, ModelOption } from "@/types/service-registry";
@@ -31,10 +31,13 @@ export default function ConfigurationStep() {
   }
 
   const coreServices = getCoreServices(registry);
+  const enabledRecommended = getRecommendedServices(registry).filter((s) =>
+    state.enabledModules.includes(s.id),
+  );
   const enabledOptional = getOptionalServices(registry).filter((s) =>
     state.enabledModules.includes(s.id),
   );
-  const allEnabled = [...coreServices, ...enabledOptional];
+  const allEnabled = [...coreServices, ...enabledRecommended, ...enabledOptional];
   const enabledIds = allEnabled.map((s) => s.id);
 
   // Get required infrastructure
@@ -99,9 +102,10 @@ export default function ConfigurationStep() {
               const port = state.infraPortOverrides[inf.id] ?? inf.port;
               const hasConflict = conflictPorts.has(port);
               return (
-                <PortRow
+                <InfraPortRow
                   key={inf.id}
-                  label={inf.name}
+                  name={inf.name}
+                  description={inf.description}
                   portVar={serviceIdToPortVar(inf.id)}
                   defaultPort={inf.port}
                   currentPort={port}
@@ -212,6 +216,57 @@ function PortRow({
   return (
     <div className="flex items-center gap-3">
       <span className="w-40 text-sm">{label}</span>
+      <span className="w-48 text-xs text-[var(--color-text-secondary)]">{portVar}</span>
+      <input
+        type="number"
+        value={currentPort}
+        onChange={(e) => {
+          const val = parseInt(e.target.value, 10);
+          if (!isNaN(val)) onChange(val);
+        }}
+        className={`w-24 rounded-lg border px-3 py-1.5 text-sm ${
+          hasConflict
+            ? "border-red-400 bg-red-50 text-red-800"
+            : "border-[var(--color-border)] bg-[var(--color-bg-secondary)]"
+        }`}
+        data-testid={`port-${portVar}`}
+      />
+      {currentPort !== defaultPort && (
+        <button
+          type="button"
+          onClick={() => onChange(defaultPort)}
+          className="text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
+        >
+          Reset ({defaultPort})
+        </button>
+      )}
+    </div>
+  );
+}
+
+function InfraPortRow({
+  name,
+  description,
+  portVar,
+  defaultPort,
+  currentPort,
+  hasConflict,
+  onChange,
+}: {
+  name: string;
+  description: string;
+  portVar: string;
+  defaultPort: number;
+  currentPort: number;
+  hasConflict: boolean;
+  onChange: (port: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="w-40">
+        <span className="text-sm">{name}</span>
+        <p className="text-[10px] leading-tight text-[var(--color-text-secondary)]">{description}</p>
+      </div>
       <span className="w-48 text-xs text-[var(--color-text-secondary)]">{portVar}</span>
       <input
         type="number"

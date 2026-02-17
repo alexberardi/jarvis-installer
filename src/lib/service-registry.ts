@@ -12,16 +12,22 @@ export function getCoreServices(registry: ServiceRegistry): ServiceDefinition[] 
   return registry.services.filter((s) => s.category === "core");
 }
 
+export function getRecommendedServices(registry: ServiceRegistry): ServiceDefinition[] {
+  return registry.services.filter((s) => s.category === "recommended");
+}
+
 export function getOptionalServices(registry: ServiceRegistry): ServiceDefinition[] {
   return registry.services.filter((s) => s.category === "optional");
 }
 
 export function getServicesByCategory(registry: ServiceRegistry): {
   core: ServiceDefinition[];
+  recommended: ServiceDefinition[];
   optional: ServiceDefinition[];
 } {
   return {
     core: getCoreServices(registry),
+    recommended: getRecommendedServices(registry),
     optional: getOptionalServices(registry),
   };
 }

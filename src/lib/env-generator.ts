@@ -1,6 +1,6 @@
 import type { WizardState } from "@/types/wizard";
 import type { ServiceRegistry } from "@/types/service-registry";
-import { getCoreServices, getOptionalServices, getRequiredInfrastructure } from "@/lib/service-registry";
+import { getCoreServices, getRecommendedServices, getOptionalServices, getRequiredInfrastructure } from "@/lib/service-registry";
 import { serviceIdToPortVar } from "@/lib/port-utils";
 import { SECRET_KEYS } from "@/lib/secret-generator";
 
@@ -26,10 +26,13 @@ export function generateEnv(state: WizardState, registry: ServiceRegistry): stri
 
   // Service ports
   const coreServices = getCoreServices(registry);
+  const enabledRecommended = getRecommendedServices(registry).filter((s) =>
+    state.enabledModules.includes(s.id),
+  );
   const enabledOptional = getOptionalServices(registry).filter((s) =>
     state.enabledModules.includes(s.id),
   );
-  const allEnabled = [...coreServices, ...enabledOptional];
+  const allEnabled = [...coreServices, ...enabledRecommended, ...enabledOptional];
 
   lines.push("# --- Service Ports ---");
   for (const svc of allEnabled) {

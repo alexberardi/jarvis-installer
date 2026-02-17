@@ -73,11 +73,13 @@
       "id": "jarvis-whisper-api",
       "name": "Whisper STT",
       "description": "Speech-to-text via whisper.cpp (base.en model included)",
-      "category": "optional",
+      "category": "recommended",
       "port": 8012,
       "image": "ghcr.io/alexberardi/jarvis-whisper-api:latest",
       "healthCheck": "/health",
-      "dependsOn": ["jarvis-auth", "jarvis-config-service"],
+      "dependsOn": ["postgres", "jarvis-auth", "jarvis-config-service"],
+      "database": "jarvis_whisper",
+      "dbDriverPrefix": "postgresql+psycopg2://",
       "modelOptions": [
         { "id": "base.en", "name": "Base English", "size": "~140MB", "default": true, "builtin": true },
         { "id": "small.en", "name": "Small English", "size": "~460MB" },
@@ -85,6 +87,7 @@
         { "id": "large-v3", "name": "Large v3 (Multilingual)", "size": "~3GB" }
       ],
       "envVars": [
+        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
         { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:8013" }
       ]
     },
@@ -92,7 +95,7 @@
       "id": "jarvis-tts",
       "name": "Text-to-Speech",
       "description": "Text-to-speech synthesis via Piper for voice responses",
-      "category": "optional",
+      "category": "recommended",
       "port": 8009,
       "image": "ghcr.io/alexberardi/jarvis-tts:latest",
       "healthCheck": "/health",
@@ -148,7 +151,7 @@
     {
       "id": "postgres",
       "name": "PostgreSQL",
-      "description": "Relational database for auth, command-center, recipes, and config",
+      "description": "Primary database — stores users, commands, recipes, settings, and service config",
       "image": "postgres:16-alpine",
       "port": 5432,
       "envVars": [
@@ -161,7 +164,7 @@
     {
       "id": "redis",
       "name": "Redis",
-      "description": "In-memory cache and message broker",
+      "description": "Task queue — used for long-running jobs like OCR processing and async pipelines",
       "image": "redis:7-alpine",
       "port": 6379,
       "envVars": [
@@ -172,7 +175,7 @@
     {
       "id": "loki",
       "name": "Loki",
-      "description": "Log aggregation backend for jarvis-logs",
+      "description": "Logging database — collects and indexes logs from all services",
       "image": "grafana/loki:2.9.0",
       "port": 3100,
       "envVars": [],
@@ -181,7 +184,7 @@
     {
       "id": "grafana",
       "name": "Grafana",
-      "description": "Monitoring and log visualization dashboard",
+      "description": "Monitoring dashboard — visualize logs and service health metrics",
       "image": "grafana/grafana:latest",
       "port": 3001,
       "envVars": [

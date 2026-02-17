@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   parseRegistry,
   getCoreServices,
+  getRecommendedServices,
   getOptionalServices,
   getServicesByCategory,
   getServiceById,
@@ -77,6 +78,23 @@ describe("service-registry", () => {
     });
   });
 
+  describe("getRecommendedServices", () => {
+    it("returns only services with category 'recommended'", () => {
+      const registry = parseRegistry(registryJson);
+      const recommended = getRecommendedServices(registry);
+      expect(recommended.length).toBeGreaterThan(0);
+      expect(recommended.every((s) => s.category === "recommended")).toBe(true);
+    });
+
+    it("includes whisper-api and tts", () => {
+      const registry = parseRegistry(registryJson);
+      const recommended = getRecommendedServices(registry);
+      const ids = recommended.map((s) => s.id);
+      expect(ids).toContain("jarvis-whisper-api");
+      expect(ids).toContain("jarvis-tts");
+    });
+  });
+
   describe("getOptionalServices", () => {
     it("returns only services with category 'optional'", () => {
       const registry = parseRegistry(registryJson);
@@ -85,15 +103,21 @@ describe("service-registry", () => {
       expect(optional.every((s) => s.category === "optional")).toBe(true);
     });
 
-    it("includes whisper-api, tts, mcp, ocr, recipes", () => {
+    it("includes mcp, ocr, recipes", () => {
       const registry = parseRegistry(registryJson);
       const optional = getOptionalServices(registry);
       const ids = optional.map((s) => s.id);
-      expect(ids).toContain("jarvis-whisper-api");
-      expect(ids).toContain("jarvis-tts");
       expect(ids).toContain("jarvis-mcp");
       expect(ids).toContain("jarvis-ocr-service");
       expect(ids).toContain("jarvis-recipes-server");
+    });
+
+    it("does not include recommended services", () => {
+      const registry = parseRegistry(registryJson);
+      const optional = getOptionalServices(registry);
+      const ids = optional.map((s) => s.id);
+      expect(ids).not.toContain("jarvis-whisper-api");
+      expect(ids).not.toContain("jarvis-tts");
     });
   });
 
@@ -102,8 +126,9 @@ describe("service-registry", () => {
       const registry = parseRegistry(registryJson);
       const grouped = getServicesByCategory(registry);
       expect(grouped.core.length).toBeGreaterThan(0);
+      expect(grouped.recommended.length).toBeGreaterThan(0);
       expect(grouped.optional.length).toBeGreaterThan(0);
-      expect(grouped.core.length + grouped.optional.length).toBe(
+      expect(grouped.core.length + grouped.recommended.length + grouped.optional.length).toBe(
         registry.services.length,
       );
     });
@@ -158,10 +183,17 @@ describe("service-registry", () => {
       expect(pgCount).toBe(1);
     });
 
+    it("returns postgres for whisper-api (has database)", () => {
+      const registry = parseRegistry(registryJson);
+      const infra = getRequiredInfrastructure(registry, ["jarvis-whisper-api"]);
+      const infraIds = infra.map((i) => i.id);
+      expect(infraIds).toContain("postgres");
+    });
+
     it("returns empty array when no infra is needed", () => {
       const registry = parseRegistry(registryJson);
-      // whisper-api depends on jarvis-auth and jarvis-config-service (not infra)
-      const infra = getRequiredInfrastructure(registry, ["jarvis-whisper-api"]);
+      // tts depends only on jarvis-auth and jarvis-config-service (no infra)
+      const infra = getRequiredInfrastructure(registry, ["jarvis-tts"]);
       expect(infra).toEqual([]);
     });
   });

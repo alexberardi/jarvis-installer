@@ -21,7 +21,7 @@ export interface ServiceDefinition {
   id: string;
   name: string;
   description: string;
-  category: "core" | "optional";
+  category: "core" | "recommended" | "optional";
   port: number;
   image: string;
   healthCheck: string;

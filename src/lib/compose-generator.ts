@@ -1,20 +1,23 @@
 import type { WizardState } from "@/types/wizard";
 import type { ServiceRegistry, ServiceDefinition, InfrastructureDefinition } from "@/types/service-registry";
-import { getCoreServices, getOptionalServices, getRequiredInfrastructure } from "@/lib/service-registry";
+import { getCoreServices, getRecommendedServices, getOptionalServices, getRequiredInfrastructure } from "@/lib/service-registry";
 import { serviceIdToPortVar } from "@/lib/port-utils";
 
 /**
- * Returns all enabled services (core + selected optional).
+ * Returns all enabled services (core + selected recommended + selected optional).
  */
 export function getAllEnabledServices(
   state: WizardState,
   registry: ServiceRegistry,
 ): ServiceDefinition[] {
   const core = getCoreServices(registry);
+  const enabledRecommended = getRecommendedServices(registry).filter((s) =>
+    state.enabledModules.includes(s.id),
+  );
   const enabledOptional = getOptionalServices(registry).filter((s) =>
     state.enabledModules.includes(s.id),
   );
-  return [...core, ...enabledOptional];
+  return [...core, ...enabledRecommended, ...enabledOptional];
 }
 
 /**

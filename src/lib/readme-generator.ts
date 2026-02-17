@@ -1,14 +1,17 @@
 import type { WizardState } from "@/types/wizard";
 import type { ServiceRegistry } from "@/types/service-registry";
-import { getCoreServices, getOptionalServices } from "@/lib/service-registry";
+import { getCoreServices, getRecommendedServices, getOptionalServices } from "@/lib/service-registry";
 
 export function generateReadme(state: WizardState, registry: ServiceRegistry): string {
   const lines: string[] = [];
   const coreServices = getCoreServices(registry);
+  const enabledRecommended = getRecommendedServices(registry).filter((s) =>
+    state.enabledModules.includes(s.id),
+  );
   const enabledOptional = getOptionalServices(registry).filter((s) =>
     state.enabledModules.includes(s.id),
   );
-  const allEnabled = [...coreServices, ...enabledOptional];
+  const allEnabled = [...coreServices, ...enabledRecommended, ...enabledOptional];
 
   lines.push("# Jarvis");
   lines.push("");
@@ -36,6 +39,16 @@ export function generateReadme(state: WizardState, registry: ServiceRegistry): s
     lines.push(`- **${s.name}** (port ${port}) - ${s.description}`);
   }
   lines.push("");
+
+  if (enabledRecommended.length > 0) {
+    lines.push("### Recommended");
+    lines.push("");
+    for (const s of enabledRecommended) {
+      const port = state.portOverrides[s.id] ?? s.port;
+      lines.push(`- **${s.name}** (port ${port}) - ${s.description}`);
+    }
+    lines.push("");
+  }
 
   if (enabledOptional.length > 0) {
     lines.push("### Optional");

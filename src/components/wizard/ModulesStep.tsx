@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useWizard } from "@/context/WizardContext";
-import { parseRegistry, getCoreServices, getOptionalServices } from "@/lib/service-registry";
+import { parseRegistry, getCoreServices, getRecommendedServices, getOptionalServices } from "@/lib/service-registry";
 import { resolveModuleToggle } from "@/lib/dependency-resolver";
 import type { ServiceRegistry, ServiceDefinition } from "@/types/service-registry";
 
@@ -19,7 +19,12 @@ export default function ModulesStep() {
   }
 
   const coreServices = getCoreServices(registry);
+  const recommendedServices = getRecommendedServices(registry);
   const optionalServices = getOptionalServices(registry);
+
+  const hasWhisper = state.enabledModules.includes("jarvis-whisper-api");
+  const hasTts = state.enabledModules.includes("jarvis-tts");
+  const missingRecommended = !hasWhisper || !hasTts;
 
   function handleToggle(serviceId: string, enabled: boolean) {
     const result = resolveModuleToggle(registry!, state.enabledModules, serviceId, enabled);
@@ -44,6 +49,37 @@ export default function ModulesStep() {
           ))}
         </div>
       </div>
+
+      {/* Recommended services */}
+      {recommendedServices.length > 0 && (
+        <div data-testid="recommended-services">
+          <h3 className="mb-3 text-sm font-medium text-[var(--color-text-secondary)]">
+            Recommended Services
+          </h3>
+          <div className="space-y-2">
+            {recommendedServices.map((service) => (
+              <ServiceCard
+                key={service.id}
+                service={service}
+                enabled={state.enabledModules.includes(service.id)}
+                onToggle={(enabled) => handleToggle(service.id, enabled)}
+              />
+            ))}
+          </div>
+          {missingRecommended && (
+            <div
+              className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800"
+              data-testid="recommended-warning"
+            >
+              {!hasWhisper && !hasTts
+                ? "Without Whisper STT and Text-to-Speech, you will need to configure your own speech-to-text and text-to-speech services for voice interaction."
+                : !hasWhisper
+                  ? "Without Whisper STT, you will need to configure your own speech-to-text service for voice input."
+                  : "Without Text-to-Speech, you will need to configure your own TTS service for voice responses."}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Optional services */}
       <div data-testid="optional-services">
