@@ -11,35 +11,35 @@ export interface ModelTierConfig {
 
 export const MODEL_TIERS: Record<VramTier, ModelTierConfig> = {
   high: {
-    modelId: "mistral-7b-instruct-v0.3",
-    modelName: "Mistral 7B Instruct v0.3",
+    modelId: "llama-3.1-8b-instruct",
+    modelName: "Llama 3.1 8B Instruct",
     quantization: "q8_0",
     gpuLayers: "all",
-    estimatedVramMb: 8500,
+    estimatedVramMb: 9500,
     description:
       "High quality quantization with all layers on GPU. Best response quality and speed.",
   },
   medium: {
-    modelId: "mistral-7b-instruct-v0.3",
-    modelName: "Mistral 7B Instruct v0.3",
+    modelId: "llama-3.1-8b-instruct",
+    modelName: "Llama 3.1 8B Instruct",
     quantization: "q4_k_m",
     gpuLayers: "all",
-    estimatedVramMb: 5000,
+    estimatedVramMb: 5500,
     description:
       "Balanced quantization with all layers on GPU. Good quality with moderate VRAM usage.",
   },
   low: {
-    modelId: "mistral-7b-instruct-v0.3",
-    modelName: "Mistral 7B Instruct v0.3",
+    modelId: "llama-3.1-8b-instruct",
+    modelName: "Llama 3.1 8B Instruct",
     quantization: "q4_k_m",
     gpuLayers: 20,
-    estimatedVramMb: 3200,
+    estimatedVramMb: 3500,
     description:
       "Balanced quantization with partial GPU offload. Some layers run on CPU.",
   },
   "cpu-only": {
-    modelId: "mistral-7b-instruct-v0.3",
-    modelName: "Mistral 7B Instruct v0.3",
+    modelId: "llama-3.1-8b-instruct",
+    modelName: "Llama 3.1 8B Instruct",
     quantization: "q4_k_m",
     gpuLayers: 0,
     estimatedVramMb: 0,

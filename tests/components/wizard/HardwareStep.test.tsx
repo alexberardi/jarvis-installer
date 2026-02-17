@@ -70,7 +70,7 @@ describe("HardwareStep", () => {
     await user.clear(vramInput);
     await user.type(vramInput, "24576");
     // Check for model name and quantization in recommendation
-    expect(screen.getByText(/mistral/i)).toBeInTheDocument();
+    expect(screen.getByText(/llama/i)).toBeInTheDocument();
     expect(screen.getByText(/q8_0|q4_k_m/i)).toBeInTheDocument();
   });
 

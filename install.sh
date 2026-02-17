@@ -5,7 +5,7 @@ set -euo pipefail
 # Usage: curl -fsSL <url>/install.sh | bash -s -- [flags]
 
 JARVIS_DIR="${HOME}/jarvis"
-REPO_BASE_URL="https://raw.githubusercontent.com/alexanderberardi/jarvis-installer/main"
+REPO_BASE_URL="https://raw.githubusercontent.com/alexberardi/jarvis-installer/main"
 
 # Defaults
 PROFILE="gpu"

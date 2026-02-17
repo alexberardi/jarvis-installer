@@ -15,8 +15,8 @@ function makeState(overrides: Partial<WizardState> = {}): WizardState {
     vramMb: 8192,
     ramGb: 16,
     recommendation: {
-      modelId: "mistral-7b-instruct-v0.3",
-      modelName: "Mistral 7B Instruct v0.3",
+      modelId: "llama-3.1-8b-instruct",
+      modelName: "Llama 3.1 8B Instruct",
       quantization: "q4_k_m",
       gpuLayers: "all",
       estimatedVramMb: 5000,
@@ -55,8 +55,8 @@ describe("env-generator", () => {
       makeState({
         inferenceMode: "cpu",
         recommendation: {
-          modelId: "mistral-7b-instruct-v0.3",
-          modelName: "Mistral 7B Instruct v0.3",
+          modelId: "llama-3.1-8b-instruct",
+          modelName: "Llama 3.1 8B Instruct",
           quantization: "q4_k_m",
           gpuLayers: 0,
           estimatedVramMb: 0,
@@ -72,7 +72,7 @@ describe("env-generator", () => {
 
   it("includes model configuration", () => {
     const env = generateEnv(makeState(), registry);
-    expect(env).toContain("MODEL_ID=mistral-7b-instruct-v0.3");
+    expect(env).toContain("MODEL_ID=llama-3.1-8b-instruct");
     expect(env).toContain("QUANTIZATION=q4_k_m");
   });
 

@@ -38,7 +38,7 @@ export default function LandingPage() {
             Get Started
           </Link>
           <a
-            href="https://github.com/alexanderberardi/jarvis"
+            href="https://github.com/alexberardi/jarvis"
             className="rounded-lg border border-[var(--color-border)] px-8 py-3 text-sm font-medium hover:bg-[var(--color-bg-tertiary)]"
           >
             GitHub

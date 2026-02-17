@@ -1,7 +1,7 @@
 import type { WizardState } from "@/types/wizard";
 
 const INSTALL_SCRIPT_URL =
-  "https://raw.githubusercontent.com/alexanderberardi/jarvis-installer/main/install.sh";
+  "https://raw.githubusercontent.com/alexberardi/jarvis-installer/main/install.sh";
 
 export function generateInstallCommand(state: WizardState): string {
   const flags: string[] = [];

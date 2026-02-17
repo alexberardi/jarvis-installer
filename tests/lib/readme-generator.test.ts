@@ -15,8 +15,8 @@ function makeState(overrides: Partial<WizardState> = {}): WizardState {
     vramMb: 8192,
     ramGb: 16,
     recommendation: {
-      modelId: "mistral-7b-instruct-v0.3",
-      modelName: "Mistral 7B Instruct v0.3",
+      modelId: "llama-3.1-8b-instruct",
+      modelName: "Llama 3.1 8B Instruct",
       quantization: "q4_k_m",
       gpuLayers: "all",
       estimatedVramMb: 5000,
@@ -58,7 +58,7 @@ describe("readme-generator", () => {
 
   it("includes model information", () => {
     const readme = generateReadme(makeState(), registry);
-    expect(readme).toContain("Mistral 7B");
+    expect(readme).toContain("Llama 3.1 8B");
     expect(readme).toContain("q4_k_m");
   });
 });
