@@ -1,18 +1,55 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "services": [
+    {
+      "id": "jarvis-config-service",
+      "name": "Config Service",
+      "description": "Centralized configuration and service discovery hub",
+      "category": "core",
+      "port": 8013,
+      "image": "ghcr.io/alexberardi/jarvis-config-service:latest",
+      "healthCheck": "/health",
+      "dependsOn": ["postgres"],
+      "database": "jarvis_config",
+      "dbDriverPrefix": "postgresql://",
+      "envVars": [
+        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
+        { "name": "MIGRATIONS_DATABASE_URL", "description": "PostgreSQL URL for Alembic migrations", "required": true },
+        { "name": "JARVIS_CONFIG_ADMIN_TOKEN", "description": "Admin token for write operations", "required": true, "secret": true, "secretRef": "JARVIS_CONFIG_ADMIN_TOKEN" },
+        { "name": "JARVIS_AUTH_ADMIN_TOKEN", "description": "Token for auth admin endpoints", "required": true, "secret": true, "secretRef": "JARVIS_AUTH_ADMIN_TOKEN" },
+        { "name": "JARVIS_AUTH_URL", "description": "Auth service URL", "required": false, "default": "http://jarvis-auth:8007" }
+      ]
+    },
     {
       "id": "jarvis-auth",
       "name": "Auth Service",
       "description": "JWT authentication with register, login, refresh, and logout",
       "category": "core",
       "port": 8007,
-      "image": "ghcr.io/jarvis/jarvis-auth:latest",
+      "image": "ghcr.io/alexberardi/jarvis-auth:latest",
       "healthCheck": "/health",
-      "dependsOn": ["postgres"],
+      "dependsOn": ["postgres", "jarvis-config-service"],
+      "database": "jarvis_auth",
+      "dbDriverPrefix": "postgresql+psycopg2://",
       "envVars": [
         { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
-        { "name": "SECRET_KEY", "description": "JWT signing key", "required": true, "secret": true }
+        { "name": "AUTH_SECRET_KEY", "description": "JWT signing key", "required": true, "secret": true, "secretRef": "AUTH_SECRET_KEY" },
+        { "name": "JARVIS_AUTH_ADMIN_TOKEN", "description": "Admin token for auth endpoints", "required": true, "secret": true, "secretRef": "JARVIS_AUTH_ADMIN_TOKEN" },
+        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:8013" }
+      ]
+    },
+    {
+      "id": "jarvis-logs",
+      "name": "Logging Service",
+      "description": "Centralized logging for all Jarvis services via Loki",
+      "category": "core",
+      "port": 8006,
+      "image": "ghcr.io/alexberardi/jarvis-logs:latest",
+      "healthCheck": "/health",
+      "dependsOn": ["loki", "jarvis-auth"],
+      "envVars": [
+        { "name": "LOKI_URL", "description": "Loki push endpoint", "required": true, "default": "http://loki:3100" },
+        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:8013" }
       ]
     },
     {
@@ -21,109 +58,89 @@
       "description": "Central voice/command API, node management, and tool routing",
       "category": "core",
       "port": 8002,
-      "image": "ghcr.io/jarvis/jarvis-command-center:latest",
+      "image": "ghcr.io/alexberardi/jarvis-command-center:latest",
       "healthCheck": "/health",
-      "dependsOn": ["postgres", "jarvis-auth", "jarvis-whisper"],
+      "dependsOn": ["postgres", "jarvis-auth", "jarvis-config-service"],
+      "database": "jarvis_command_center",
+      "dbDriverPrefix": "postgresql://",
       "envVars": [
         { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
-        { "name": "ADMIN_API_KEY", "description": "Admin endpoint protection", "required": true, "secret": true },
-        { "name": "JARVIS_AUTH_BASE_URL", "description": "Auth service URL", "required": true, "default": "http://jarvis-auth:8007" }
+        { "name": "ADMIN_API_KEY", "description": "Admin endpoint protection", "required": true, "secret": true, "secretRef": "ADMIN_API_KEY" },
+        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:8013" }
       ]
     },
     {
-      "id": "jarvis-whisper",
+      "id": "jarvis-whisper-api",
       "name": "Whisper STT",
-      "description": "Speech-to-text via whisper.cpp",
-      "category": "core",
+      "description": "Speech-to-text via whisper.cpp (base.en model included)",
+      "category": "optional",
       "port": 8012,
-      "image": "ghcr.io/jarvis/jarvis-whisper-api:latest",
+      "image": "ghcr.io/alexberardi/jarvis-whisper-api:latest",
       "healthCheck": "/health",
-      "dependsOn": [],
-      "envVars": []
+      "dependsOn": ["jarvis-auth", "jarvis-config-service"],
+      "modelOptions": [
+        { "id": "base.en", "name": "Base English", "size": "~140MB", "default": true, "builtin": true },
+        { "id": "small.en", "name": "Small English", "size": "~460MB" },
+        { "id": "medium.en", "name": "Medium English", "size": "~1.5GB" },
+        { "id": "large-v3", "name": "Large v3 (Multilingual)", "size": "~3GB" }
+      ],
+      "envVars": [
+        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:8013" }
+      ]
     },
     {
       "id": "jarvis-tts",
       "name": "Text-to-Speech",
-      "description": "Text-to-speech synthesis for voice responses",
-      "category": "core",
+      "description": "Text-to-speech synthesis via Piper for voice responses",
+      "category": "optional",
       "port": 8009,
-      "image": "ghcr.io/jarvis/jarvis-tts:latest",
+      "image": "ghcr.io/alexberardi/jarvis-tts:latest",
       "healthCheck": "/health",
-      "dependsOn": [],
-      "envVars": []
-    },
-    {
-      "id": "jarvis-logs",
-      "name": "Logging Service",
-      "description": "Centralized logging for all Jarvis services",
-      "category": "core",
-      "port": 8006,
-      "image": "ghcr.io/jarvis/jarvis-logs:latest",
-      "healthCheck": "/health",
-      "dependsOn": ["loki"],
+      "dependsOn": ["jarvis-auth", "jarvis-config-service"],
       "envVars": [
-        { "name": "LOKI_URL", "description": "Loki push endpoint", "required": true, "default": "http://loki:3100" }
-      ]
-    },
-    {
-      "id": "jarvis-config-service",
-      "name": "Config Service",
-      "description": "Centralized configuration and service discovery",
-      "category": "core",
-      "port": 8013,
-      "image": "ghcr.io/jarvis/jarvis-config-service:latest",
-      "healthCheck": "/health",
-      "dependsOn": ["postgres"],
-      "envVars": [
-        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true }
+        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:8013" }
       ]
     },
     {
       "id": "jarvis-mcp",
       "name": "MCP Server",
-      "description": "Model Context Protocol server for AI tool integration",
-      "category": "core",
+      "description": "Model Context Protocol server for Claude Code integration",
+      "category": "optional",
       "port": 8011,
-      "image": "ghcr.io/jarvis/jarvis-mcp:latest",
+      "image": "ghcr.io/alexberardi/jarvis-mcp:latest",
       "healthCheck": "/health",
-      "dependsOn": ["jarvis-logs"],
-      "envVars": []
-    },
-    {
-      "id": "jarvis-admin",
-      "name": "Admin Dashboard",
-      "description": "Web-based admin interface for managing the Jarvis stack",
-      "category": "core",
-      "port": 3000,
-      "image": "ghcr.io/jarvis/jarvis-admin:latest",
-      "healthCheck": "/health",
-      "dependsOn": ["jarvis-auth", "jarvis-command-center"],
-      "envVars": []
+      "dependsOn": ["jarvis-config-service", "jarvis-logs"],
+      "envVars": [
+        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:8013" }
+      ]
     },
     {
       "id": "jarvis-ocr-service",
       "name": "OCR Service",
-      "description": "Optical character recognition with pluggable backends (Tesseract, EasyOCR, Apple Vision)",
+      "description": "Optical character recognition with pluggable backends",
       "category": "optional",
       "port": 5009,
-      "image": "ghcr.io/jarvis/jarvis-ocr-service:latest",
+      "image": "ghcr.io/alexberardi/jarvis-ocr-service:latest",
       "healthCheck": "/health",
-      "dependsOn": [],
+      "dependsOn": ["jarvis-auth", "jarvis-config-service"],
       "envVars": [
-        { "name": "JARVIS_AUTH_BASE_URL", "description": "Auth service URL for validation", "required": true, "default": "http://jarvis-auth:8007" }
+        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:8013" }
       ]
     },
     {
-      "id": "jarvis-recipes",
+      "id": "jarvis-recipes-server",
       "name": "Recipes Service",
       "description": "Recipe CRUD, URL parsing, and meal planning",
       "category": "optional",
       "port": 8001,
-      "image": "ghcr.io/jarvis/jarvis-recipes-server:latest",
+      "image": "ghcr.io/alexberardi/jarvis-recipes-server:latest",
       "healthCheck": "/health",
-      "dependsOn": ["postgres", "jarvis-ocr-service"],
+      "dependsOn": ["postgres", "jarvis-auth", "jarvis-config-service"],
+      "database": "jarvis_recipes",
+      "dbDriverPrefix": "postgresql+psycopg2://",
       "envVars": [
-        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true }
+        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
+        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:8013" }
       ]
     }
   ],
@@ -135,9 +152,9 @@
       "image": "postgres:16-alpine",
       "port": 5432,
       "envVars": [
-        { "name": "POSTGRES_USER", "description": "Database user", "required": true, "default": "jarvis" },
-        { "name": "POSTGRES_PASSWORD", "description": "Database password", "required": true, "secret": true },
-        { "name": "POSTGRES_DB", "description": "Database name", "required": true, "default": "jarvis" }
+        { "name": "POSTGRES_USER", "description": "Database superuser", "required": true, "default": "jarvis" },
+        { "name": "POSTGRES_PASSWORD", "description": "Database password", "required": true, "secret": true, "secretRef": "POSTGRES_PASSWORD" },
+        { "name": "POSTGRES_DB", "description": "Default database name", "required": true, "default": "jarvis_config" }
       ],
       "volumes": ["jarvis-postgres-data:/var/lib/postgresql/data"]
     },
@@ -147,13 +164,15 @@
       "description": "In-memory cache and message broker",
       "image": "redis:7-alpine",
       "port": 6379,
-      "envVars": [],
+      "envVars": [
+        { "name": "REDIS_PASSWORD", "description": "Redis password", "required": true, "secret": true, "secretRef": "REDIS_PASSWORD" }
+      ],
       "volumes": ["jarvis-redis-data:/data"]
     },
     {
       "id": "loki",
       "name": "Loki",
-      "description": "Log aggregation backend",
+      "description": "Log aggregation backend for jarvis-logs",
       "image": "grafana/loki:2.9.0",
       "port": 3100,
       "envVars": [],
@@ -166,7 +185,7 @@
       "image": "grafana/grafana:latest",
       "port": 3001,
       "envVars": [
-        { "name": "GF_SECURITY_ADMIN_PASSWORD", "description": "Grafana admin password", "required": true, "secret": true, "default": "jarvis" }
+        { "name": "GF_SECURITY_ADMIN_PASSWORD", "description": "Grafana admin password", "required": true, "default": "jarvis" }
       ],
       "volumes": ["jarvis-grafana-data:/var/lib/grafana"]
     }

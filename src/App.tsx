@@ -1,11 +1,10 @@
 import { Routes, Route } from "react-router";
 import LandingPage from "@/components/landing/LandingPage";
 import WizardShell from "@/components/wizard/WizardShell";
-import HardwareStep from "@/components/wizard/HardwareStep";
 import ModulesStep from "@/components/wizard/ModulesStep";
+import ConfigurationStep from "@/components/wizard/ConfigurationStep";
 import OutputStep from "@/components/wizard/OutputStep";
-import { WizardProvider } from "@/context/WizardContext";
-import { useWizard } from "@/context/WizardContext";
+import { WizardProvider, useWizard } from "@/context/WizardContext";
 
 function WizardPage() {
   return (
@@ -19,8 +18,8 @@ function WizardPage() {
 function WizardStepContent() {
   const { state } = useWizard();
   const steps = [
-    <HardwareStep key="hardware" />,
-    <ModulesStep key="modules" />,
+    <ModulesStep key="services" />,
+    <ConfigurationStep key="configure" />,
     <OutputStep key="output" />,
   ];
   return (

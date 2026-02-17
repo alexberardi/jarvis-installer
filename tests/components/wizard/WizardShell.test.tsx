@@ -21,8 +21,8 @@ describe("WizardShell", () => {
 
   it("renders step labels", () => {
     renderWizardShell();
-    expect(screen.getByText("Hardware")).toBeInTheDocument();
-    expect(screen.getByText("Modules")).toBeInTheDocument();
+    expect(screen.getByText("Services")).toBeInTheDocument();
+    expect(screen.getByText("Configure")).toBeInTheDocument();
     expect(screen.getByText("Install")).toBeInTheDocument();
   });
 

@@ -15,7 +15,7 @@ export default function ModulesStep() {
   }, []);
 
   if (!registry) {
-    return <div>Loading modules...</div>;
+    return <div>Loading services...</div>;
   }
 
   const coreServices = getCoreServices(registry);
@@ -26,30 +26,12 @@ export default function ModulesStep() {
     dispatch({ type: "SET_ENABLED_MODULES", modules: result.enabled });
   }
 
-  const WAKE_WORDS = ["jarvis", "hey jarvis", "computer", "alexa"];
-
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold">Modules</h2>
-
-      {/* Wake word */}
-      <div className="space-y-1">
-        <label htmlFor="wake-word" className="block text-sm font-medium">
-          Wake Word
-        </label>
-        <select
-          id="wake-word"
-          value={state.wakeWord}
-          onChange={(e) => dispatch({ type: "SET_WAKE_WORD", wakeWord: e.target.value })}
-          className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-3 py-2 text-sm"
-        >
-          {WAKE_WORDS.map((word) => (
-            <option key={word} value={word}>
-              {word}
-            </option>
-          ))}
-        </select>
-      </div>
+      <h2 className="text-xl font-semibold">Select Services</h2>
+      <p className="text-sm text-[var(--color-text-secondary)]">
+        Choose which Jarvis services to include in your deployment.
+      </p>
 
       {/* Core services (always on) */}
       <div data-testid="core-services">
@@ -66,7 +48,7 @@ export default function ModulesStep() {
       {/* Optional services */}
       <div data-testid="optional-services">
         <h3 className="mb-3 text-sm font-medium text-[var(--color-text-secondary)]">
-          Optional Modules
+          Optional Services
         </h3>
         <div className="space-y-2">
           {optionalServices.map((service) => (
@@ -98,6 +80,9 @@ function ServiceCard({
     <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-3">
       <div className="flex-1">
         <span className="text-sm font-medium">{service.name}</span>
+        <span className="ml-2 text-xs text-[var(--color-text-secondary)]">
+          :{service.port}
+        </span>
         <p className="text-xs text-[var(--color-text-secondary)]">{service.description}</p>
       </div>
       {alwaysOn ? (

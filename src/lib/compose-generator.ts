@@ -1,135 +1,227 @@
 import type { WizardState } from "@/types/wizard";
 import type { ServiceRegistry, ServiceDefinition, InfrastructureDefinition } from "@/types/service-registry";
 import { getCoreServices, getOptionalServices, getRequiredInfrastructure } from "@/lib/service-registry";
+import { serviceIdToPortVar } from "@/lib/port-utils";
 
-export function generateCompose(state: WizardState, registry: ServiceRegistry): string {
-  const lines: string[] = [];
-  const coreServices = getCoreServices(registry);
+/**
+ * Returns all enabled services (core + selected optional).
+ */
+export function getAllEnabledServices(
+  state: WizardState,
+  registry: ServiceRegistry,
+): ServiceDefinition[] {
+  const core = getCoreServices(registry);
   const enabledOptional = getOptionalServices(registry).filter((s) =>
     state.enabledModules.includes(s.id),
   );
-  const allEnabledServices = [...coreServices, ...enabledOptional];
-  const enabledIds = allEnabledServices.map((s) => s.id);
+  return [...core, ...enabledOptional];
+}
+
+/**
+ * Returns all required infrastructure for the enabled services,
+ * plus grafana (if loki is present) and redis (always).
+ */
+function getInfraForServices(
+  enabledIds: string[],
+  registry: ServiceRegistry,
+): InfrastructureDefinition[] {
   const infra = getRequiredInfrastructure(registry, enabledIds);
 
-  // Also include grafana if loki is present
   const hasLoki = infra.some((i) => i.id === "loki");
   const grafana = registry.infrastructure.find((i) => i.id === "grafana");
   if (hasLoki && grafana && !infra.some((i) => i.id === "grafana")) {
     infra.push(grafana);
   }
 
-  // Also include redis
   const redis = registry.infrastructure.find((i) => i.id === "redis");
   if (redis && !infra.some((i) => i.id === "redis")) {
     infra.push(redis);
   }
 
-  lines.push('version: "3.8"');
-  lines.push("");
+  return infra;
+}
+
+export function generateCompose(state: WizardState, registry: ServiceRegistry): string {
+  const allEnabled = getAllEnabledServices(state, registry);
+  const enabledIds = allEnabled.map((s) => s.id);
+  const infra = getInfraForServices(enabledIds, registry);
+
+  const lines: string[] = [];
+
   lines.push("services:");
 
-  // Infrastructure services
+  // Infrastructure first
   for (const inf of infra) {
-    lines.push(...generateInfraService(inf));
     lines.push("");
+    lines.push(...generateInfraBlock(inf, state));
   }
 
   // Application services
-  for (const service of allEnabledServices) {
-    lines.push(...generateAppService(service));
+  for (const service of allEnabled) {
     lines.push("");
+    lines.push(...generateServiceBlock(service, state, registry));
   }
 
   // Networks
+  lines.push("");
   lines.push("networks:");
   lines.push("  jarvis:");
   lines.push("    driver: bridge");
-  lines.push("");
 
   // Volumes
+  lines.push("");
   lines.push("volumes:");
   const volumes = new Set<string>();
   for (const inf of infra) {
     for (const vol of inf.volumes) {
-      const volName = vol.split(":")[0]!;
-      volumes.add(volName);
+      volumes.add(vol.split(":")[0]!);
     }
   }
   for (const vol of volumes) {
     lines.push(`  ${vol}:`);
   }
 
+  lines.push("");
   return lines.join("\n");
 }
 
-function generateInfraService(infra: InfrastructureDefinition): string[] {
+function generateInfraBlock(
+  infra: InfrastructureDefinition,
+  state: WizardState,
+): string[] {
   const lines: string[] = [];
+  const portVar = serviceIdToPortVar(infra.id);
+  const hostPort = state.infraPortOverrides[infra.id] ?? infra.port;
+
   lines.push(`  ${infra.id}:`);
   lines.push(`    image: ${infra.image}`);
   lines.push(`    container_name: jarvis-${infra.id}`);
 
   if (infra.port) {
-    lines.push(`    ports:`);
-    lines.push(`      - "${infra.port}:${infra.port}"`);
+    lines.push("    ports:");
+    lines.push(`      - "\${${portVar}:-${hostPort}}:${infra.port}"`);
   }
 
+  // Environment
   if (infra.envVars.length > 0) {
-    lines.push(`    environment:`);
+    lines.push("    environment:");
     for (const env of infra.envVars) {
-      const value = env.default || (env.secret ? "CHANGE_ME" : "");
-      lines.push(`      - ${env.name}=\${${env.name}:-${value}}`);
+      if (env.secretRef) {
+        lines.push(`      ${env.name}: \${${env.secretRef}}`);
+      } else {
+        const value = env.default ?? "";
+        lines.push(`      ${env.name}: \${${env.name}:-${value}}`);
+      }
     }
   }
 
-  if (infra.volumes.length > 0) {
-    lines.push(`    volumes:`);
+  // Redis needs a command for password auth
+  if (infra.id === "redis") {
+    lines.push("    command: redis-server --requirepass \${REDIS_PASSWORD}");
+  }
+
+  // Postgres needs healthcheck and init-db mount
+  if (infra.id === "postgres") {
+    lines.push("    healthcheck:");
+    lines.push("      test: [\"CMD-SHELL\", \"pg_isready -U \${DB_USER:-jarvis}\"]");
+    lines.push("      interval: 10s");
+    lines.push("      timeout: 5s");
+    lines.push("      retries: 5");
+    lines.push("    volumes:");
+    for (const vol of infra.volumes) {
+      lines.push(`      - ${vol}`);
+    }
+    lines.push("      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh");
+  } else if (infra.volumes.length > 0) {
+    lines.push("    volumes:");
     for (const vol of infra.volumes) {
       lines.push(`      - ${vol}`);
     }
   }
 
-  lines.push(`    networks:`);
-  lines.push(`      - jarvis`);
-  lines.push(`    restart: unless-stopped`);
+  lines.push("    networks:");
+  lines.push("      - jarvis");
+  lines.push("    restart: unless-stopped");
 
   return lines;
 }
 
-function generateAppService(service: ServiceDefinition): string[] {
+function generateServiceBlock(
+  service: ServiceDefinition,
+  state: WizardState,
+  registry: ServiceRegistry,
+): string[] {
   const lines: string[] = [];
+  const portVar = serviceIdToPortVar(service.id);
+  const hostPort = state.portOverrides[service.id] ?? service.port;
+
   lines.push(`  ${service.id}:`);
   lines.push(`    image: ${service.image}`);
   lines.push(`    container_name: ${service.id}`);
 
-  lines.push(`    ports:`);
-  lines.push(`      - "${service.port}:${service.port}"`);
+  // Ports
+  lines.push("    ports:");
+  lines.push(`      - "\${${portVar}:-${hostPort}}:${service.port}"`);
 
-  if (service.envVars.length > 0) {
-    lines.push(`    environment:`);
-    for (const env of service.envVars) {
-      const value = env.default || (env.secret ? "CHANGE_ME" : "");
-      lines.push(`      - ${env.name}=\${${env.name}:-${value}}`);
+  // Environment
+  lines.push("    environment:");
+  if (service.database) {
+    const driver = service.dbDriverPrefix ?? "postgresql://";
+    lines.push(
+      `      DATABASE_URL: ${driver}\${DB_USER:-jarvis}:\${POSTGRES_PASSWORD}@postgres:5432/${service.database}`,
+    );
+    lines.push(
+      `      MIGRATIONS_DATABASE_URL: ${driver}\${DB_USER:-jarvis}:\${POSTGRES_PASSWORD}@postgres:5432/${service.database}`,
+    );
+  }
+  for (const env of service.envVars) {
+    // Skip DATABASE_URL since we generate it from the database field
+    if (env.name === "DATABASE_URL" || env.name === "MIGRATIONS_DATABASE_URL") continue;
+    if (env.secretRef) {
+      lines.push(`      ${env.name}: \${${env.secretRef}}`);
+    } else if (env.default) {
+      lines.push(`      ${env.name}: ${env.default}`);
     }
   }
 
+  // Whisper model override for non-default models
+  const isWhisper = service.id === "jarvis-whisper-api";
+  const nonDefaultWhisper = isWhisper && state.whisperModel !== "base.en";
+  if (nonDefaultWhisper) {
+    lines.push(`      WHISPER_MODEL: /models/ggml-${state.whisperModel}.bin`);
+  }
+
+  // Dependencies
   if (service.dependsOn.length > 0) {
-    lines.push(`    depends_on:`);
+    lines.push("    depends_on:");
     for (const dep of service.dependsOn) {
-      lines.push(`      ${dep}:`);
-      lines.push(`        condition: service_started`);
+      const isInfra = registry.infrastructure.some((i) => i.id === dep);
+      if (isInfra && dep === "postgres") {
+        lines.push(`      ${dep}:`);
+        lines.push("        condition: service_healthy");
+      } else {
+        lines.push(`      ${dep}:`);
+        lines.push("        condition: service_started");
+      }
     }
   }
 
-  lines.push(`    healthcheck:`);
-  lines.push(`      test: ["CMD", "curl", "-f", "http://localhost:${service.port}${service.healthCheck}"]`);
-  lines.push(`      interval: 30s`);
-  lines.push(`      timeout: 10s`);
-  lines.push(`      retries: 3`);
+  // Volumes (whisper non-default model)
+  if (nonDefaultWhisper) {
+    lines.push("    volumes:");
+    lines.push("      - ./models:/models:ro");
+  }
 
-  lines.push(`    networks:`);
-  lines.push(`      - jarvis`);
-  lines.push(`    restart: unless-stopped`);
+  // Healthcheck
+  lines.push("    healthcheck:");
+  lines.push(`      test: ["CMD", "curl", "-f", "http://localhost:${service.port}${service.healthCheck}"]`);
+  lines.push("      interval: 30s");
+  lines.push("      timeout: 10s");
+  lines.push("      retries: 3");
+
+  lines.push("    networks:");
+  lines.push("      - jarvis");
+  lines.push("    restart: unless-stopped");
 
   return lines;
 }

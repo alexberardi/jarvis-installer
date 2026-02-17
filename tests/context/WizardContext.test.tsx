@@ -15,24 +15,30 @@ describe("WizardContext", () => {
       expect(result.current.state.totalSteps).toBe(3);
     });
 
-    it("defaults to gpu inference mode", () => {
-      const { result } = renderHook(() => useWizard(), { wrapper });
-      expect(result.current.state.inferenceMode).toBe("gpu");
-    });
-
-    it("defaults to no detected GPU", () => {
-      const { result } = renderHook(() => useWizard(), { wrapper });
-      expect(result.current.state.detectedGpu).toBeNull();
-    });
-
     it("defaults to empty enabled modules", () => {
       const { result } = renderHook(() => useWizard(), { wrapper });
       expect(result.current.state.enabledModules).toEqual([]);
     });
 
-    it("defaults to command output mode", () => {
+    it("defaults to empty port overrides", () => {
       const { result } = renderHook(() => useWizard(), { wrapper });
-      expect(result.current.state.outputMode).toBe("command");
+      expect(result.current.state.portOverrides).toEqual({});
+      expect(result.current.state.infraPortOverrides).toEqual({});
+    });
+
+    it("defaults to empty secrets", () => {
+      const { result } = renderHook(() => useWizard(), { wrapper });
+      expect(result.current.state.secrets).toEqual({});
+    });
+
+    it("defaults to jarvis db user", () => {
+      const { result } = renderHook(() => useWizard(), { wrapper });
+      expect(result.current.state.dbUser).toBe("jarvis");
+    });
+
+    it("defaults to base.en whisper model", () => {
+      const { result } = renderHook(() => useWizard(), { wrapper });
+      expect(result.current.state.whisperModel).toBe("base.en");
     });
   });
 
@@ -58,7 +64,6 @@ describe("WizardContext", () => {
 
     it("does not go above totalSteps - 1", () => {
       const { result } = renderHook(() => useWizard(), { wrapper });
-      // Go to last step
       act(() => result.current.dispatch({ type: "SET_STEP", step: 2 }));
       act(() => result.current.dispatch({ type: "NEXT_STEP" }));
       expect(result.current.state.currentStep).toBe(2);
@@ -79,66 +84,16 @@ describe("WizardContext", () => {
     });
   });
 
-  describe("hardware actions", () => {
-    it("sets inference mode", () => {
-      const { result } = renderHook(() => useWizard(), { wrapper });
-      act(() => result.current.dispatch({ type: "SET_INFERENCE_MODE", mode: "cpu" }));
-      expect(result.current.state.inferenceMode).toBe("cpu");
-    });
-
-    it("sets detected GPU", () => {
-      const { result } = renderHook(() => useWizard(), { wrapper });
-      const gpu = { name: "RTX 4090", vendor: "NVIDIA", vramMb: 24576, source: "webgl" as const };
-      act(() => result.current.dispatch({ type: "SET_DETECTED_GPU", gpu }));
-      expect(result.current.state.detectedGpu).toEqual(gpu);
-    });
-
-    it("sets VRAM", () => {
-      const { result } = renderHook(() => useWizard(), { wrapper });
-      act(() => result.current.dispatch({ type: "SET_VRAM", vramMb: 8192 }));
-      expect(result.current.state.vramMb).toBe(8192);
-    });
-
-    it("sets RAM", () => {
-      const { result } = renderHook(() => useWizard(), { wrapper });
-      act(() => result.current.dispatch({ type: "SET_RAM", ramGb: 32 }));
-      expect(result.current.state.ramGb).toBe(32);
-    });
-
-    it("sets recommendation", () => {
-      const { result } = renderHook(() => useWizard(), { wrapper });
-      const rec = {
-        modelId: "test-model",
-        modelName: "Test Model",
-        quantization: "q4_k_m",
-        gpuLayers: "all" as const,
-        estimatedVramMb: 5000,
-        tier: "medium" as const,
-        description: "Test",
-      };
-      act(() => result.current.dispatch({ type: "SET_RECOMMENDATION", recommendation: rec }));
-      expect(result.current.state.recommendation).toEqual(rec);
-    });
-  });
-
-  describe("wake word", () => {
-    it("sets wake word", () => {
-      const { result } = renderHook(() => useWizard(), { wrapper });
-      act(() => result.current.dispatch({ type: "SET_WAKE_WORD", wakeWord: "hey jarvis" }));
-      expect(result.current.state.wakeWord).toBe("hey jarvis");
-    });
-  });
-
   describe("module actions", () => {
     it("sets enabled modules", () => {
       const { result } = renderHook(() => useWizard(), { wrapper });
       act(() =>
         result.current.dispatch({
           type: "SET_ENABLED_MODULES",
-          modules: ["jarvis-recipes", "jarvis-ocr-service"],
+          modules: ["jarvis-recipes-server", "jarvis-ocr-service"],
         }),
       );
-      expect(result.current.state.enabledModules).toEqual(["jarvis-recipes", "jarvis-ocr-service"]);
+      expect(result.current.state.enabledModules).toEqual(["jarvis-recipes-server", "jarvis-ocr-service"]);
     });
 
     it("toggles a module on", () => {
@@ -154,13 +109,13 @@ describe("WizardContext", () => {
       act(() =>
         result.current.dispatch({
           type: "SET_ENABLED_MODULES",
-          modules: ["jarvis-ocr-service", "jarvis-recipes"],
+          modules: ["jarvis-ocr-service", "jarvis-recipes-server"],
         }),
       );
       act(() =>
-        result.current.dispatch({ type: "TOGGLE_MODULE", serviceId: "jarvis-recipes", enabled: false }),
+        result.current.dispatch({ type: "TOGGLE_MODULE", serviceId: "jarvis-recipes-server", enabled: false }),
       );
-      expect(result.current.state.enabledModules).not.toContain("jarvis-recipes");
+      expect(result.current.state.enabledModules).not.toContain("jarvis-recipes-server");
     });
 
     it("does not duplicate module when toggling on twice", () => {
@@ -178,11 +133,66 @@ describe("WizardContext", () => {
     });
   });
 
-  describe("output mode", () => {
-    it("sets output mode to bundle", () => {
+  describe("port override actions", () => {
+    it("sets a service port override", () => {
       const { result } = renderHook(() => useWizard(), { wrapper });
-      act(() => result.current.dispatch({ type: "SET_OUTPUT_MODE", mode: "bundle" }));
-      expect(result.current.state.outputMode).toBe("bundle");
+      act(() =>
+        result.current.dispatch({ type: "SET_PORT_OVERRIDE", serviceId: "jarvis-auth", port: 9007 }),
+      );
+      expect(result.current.state.portOverrides["jarvis-auth"]).toBe(9007);
+    });
+
+    it("sets an infrastructure port override", () => {
+      const { result } = renderHook(() => useWizard(), { wrapper });
+      act(() =>
+        result.current.dispatch({ type: "SET_INFRA_PORT_OVERRIDE", infraId: "postgres", port: 5433 }),
+      );
+      expect(result.current.state.infraPortOverrides["postgres"]).toBe(5433);
+    });
+
+    it("preserves existing overrides when setting new ones", () => {
+      const { result } = renderHook(() => useWizard(), { wrapper });
+      act(() =>
+        result.current.dispatch({ type: "SET_PORT_OVERRIDE", serviceId: "jarvis-auth", port: 9007 }),
+      );
+      act(() =>
+        result.current.dispatch({ type: "SET_PORT_OVERRIDE", serviceId: "jarvis-logs", port: 9006 }),
+      );
+      expect(result.current.state.portOverrides["jarvis-auth"]).toBe(9007);
+      expect(result.current.state.portOverrides["jarvis-logs"]).toBe(9006);
+    });
+  });
+
+  describe("secret actions", () => {
+    it("sets a single secret", () => {
+      const { result } = renderHook(() => useWizard(), { wrapper });
+      act(() =>
+        result.current.dispatch({ type: "SET_SECRET", name: "AUTH_SECRET_KEY", value: "abc123" }),
+      );
+      expect(result.current.state.secrets["AUTH_SECRET_KEY"]).toBe("abc123");
+    });
+
+    it("regenerates all secrets", () => {
+      const { result } = renderHook(() => useWizard(), { wrapper });
+      const newSecrets = { AUTH_SECRET_KEY: "x", POSTGRES_PASSWORD: "y" };
+      act(() =>
+        result.current.dispatch({ type: "REGENERATE_SECRETS", secrets: newSecrets }),
+      );
+      expect(result.current.state.secrets).toEqual(newSecrets);
+    });
+  });
+
+  describe("database and whisper", () => {
+    it("sets db user", () => {
+      const { result } = renderHook(() => useWizard(), { wrapper });
+      act(() => result.current.dispatch({ type: "SET_DB_USER", user: "admin" }));
+      expect(result.current.state.dbUser).toBe("admin");
+    });
+
+    it("sets whisper model", () => {
+      const { result } = renderHook(() => useWizard(), { wrapper });
+      act(() => result.current.dispatch({ type: "SET_WHISPER_MODEL", model: "large-v3" }));
+      expect(result.current.state.whisperModel).toBe("large-v3");
     });
   });
 });

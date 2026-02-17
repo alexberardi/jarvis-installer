@@ -1,34 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { generateEnv } from "@/lib/env-generator";
 import { parseRegistry } from "@/lib/service-registry";
-import type { WizardState } from "@/types/wizard";
+import { makeState } from "../helpers/make-state";
 import registryJson from "../../public/service-registry.json";
 
 const registry = parseRegistry(registryJson);
-
-function makeState(overrides: Partial<WizardState> = {}): WizardState {
-  return {
-    currentStep: 3,
-    totalSteps: 3,
-    inferenceMode: "gpu",
-    detectedGpu: null,
-    vramMb: 8192,
-    ramGb: 16,
-    recommendation: {
-      modelId: "llama-3.1-8b-instruct",
-      modelName: "Llama 3.1 8B Instruct",
-      quantization: "q4_k_m",
-      gpuLayers: "all",
-      estimatedVramMb: 5000,
-      tier: "medium",
-      description: "Test",
-    },
-    wakeWord: "jarvis",
-    enabledModules: [],
-    outputMode: "command",
-    ...overrides,
-  };
-}
 
 describe("env-generator", () => {
   it("generates valid KEY=value format", () => {
@@ -41,49 +17,56 @@ describe("env-generator", () => {
 
   it("includes section comments", () => {
     const env = generateEnv(makeState(), registry);
-    expect(env).toContain("#");
+    expect(env).toContain("# --- Secrets ---");
+    expect(env).toContain("# --- Database ---");
+    expect(env).toContain("# --- Service Ports ---");
+    expect(env).toContain("# --- Infrastructure Ports ---");
   });
 
-  it("includes GPU vars when GPU mode", () => {
-    const env = generateEnv(makeState({ inferenceMode: "gpu" }), registry);
-    expect(env).toContain("INFERENCE_MODE=gpu");
-    expect(env).toContain("GPU_LAYERS=all");
+  it("includes all secrets from state", () => {
+    const env = generateEnv(makeState(), registry);
+    expect(env).toContain("AUTH_SECRET_KEY=" + "a".repeat(64));
+    expect(env).toContain("POSTGRES_PASSWORD=" + "e".repeat(32));
+    expect(env).toContain("REDIS_PASSWORD=" + "f".repeat(32));
   });
 
-  it("includes CPU vars when CPU mode", () => {
+  it("includes DB_USER", () => {
+    const env = generateEnv(makeState(), registry);
+    expect(env).toContain("DB_USER=jarvis");
+  });
+
+  it("includes custom DB_USER", () => {
+    const env = generateEnv(makeState({ dbUser: "admin" }), registry);
+    expect(env).toContain("DB_USER=admin");
+  });
+
+  it("includes core service ports", () => {
+    const env = generateEnv(makeState(), registry);
+    expect(env).toContain("AUTH_PORT=8007");
+    expect(env).toContain("COMMAND_CENTER_PORT=8002");
+    expect(env).toContain("CONFIG_SERVICE_PORT=8013");
+    expect(env).toContain("LOGS_PORT=8006");
+  });
+
+  it("includes port overrides", () => {
     const env = generateEnv(
-      makeState({
-        inferenceMode: "cpu",
-        recommendation: {
-          modelId: "llama-3.1-8b-instruct",
-          modelName: "Llama 3.1 8B Instruct",
-          quantization: "q4_k_m",
-          gpuLayers: 0,
-          estimatedVramMb: 0,
-          tier: "cpu-only",
-          description: "CPU-only inference",
-        },
-      }),
+      makeState({ portOverrides: { "jarvis-auth": 9007 } }),
       registry,
     );
-    expect(env).toContain("INFERENCE_MODE=cpu");
-    expect(env).toContain("GPU_LAYERS=0");
+    expect(env).toContain("AUTH_PORT=9007");
   });
 
-  it("includes model configuration", () => {
+  it("includes infrastructure ports", () => {
     const env = generateEnv(makeState(), registry);
-    expect(env).toContain("MODEL_ID=llama-3.1-8b-instruct");
-    expect(env).toContain("QUANTIZATION=q4_k_m");
+    expect(env).toContain("POSTGRES_PORT=5432");
+    expect(env).toContain("REDIS_PORT=6379");
   });
 
-  it("includes placeholder secrets", () => {
-    const env = generateEnv(makeState(), registry);
-    expect(env).toContain("SECRET_KEY=");
-    expect(env).toContain("POSTGRES_PASSWORD=");
-  });
-
-  it("includes database URL", () => {
-    const env = generateEnv(makeState(), registry);
-    expect(env).toContain("DATABASE_URL=");
+  it("includes optional service ports when enabled", () => {
+    const env = generateEnv(
+      makeState({ enabledModules: ["jarvis-whisper-api"] }),
+      registry,
+    );
+    expect(env).toContain("WHISPER_API_PORT=8012");
   });
 });

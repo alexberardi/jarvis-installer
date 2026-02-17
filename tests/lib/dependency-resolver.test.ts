@@ -14,19 +14,6 @@ function getRegistry(): ServiceRegistry {
 
 describe("dependency-resolver", () => {
   describe("resolveModuleToggle", () => {
-    it("enabling recipes auto-enables ocr-service", () => {
-      const registry = getRegistry();
-      const currentEnabled: string[] = [];
-      const result = resolveModuleToggle(
-        registry,
-        currentEnabled,
-        "jarvis-recipes",
-        true,
-      );
-      expect(result.enabled).toContain("jarvis-recipes");
-      expect(result.enabled).toContain("jarvis-ocr-service");
-    });
-
     it("enabling a module with no optional dependencies adds only itself", () => {
       const registry = getRegistry();
       const currentEnabled: string[] = [];
@@ -40,20 +27,33 @@ describe("dependency-resolver", () => {
       expect(result.enabled).toHaveLength(1);
     });
 
-    it("disabling ocr-service when recipes is enabled produces a warning", () => {
+    it("enabling recipes adds only itself (no optional deps)", () => {
       const registry = getRegistry();
-      const currentEnabled = ["jarvis-ocr-service", "jarvis-recipes"];
+      const currentEnabled: string[] = [];
       const result = resolveModuleToggle(
         registry,
         currentEnabled,
-        "jarvis-ocr-service",
-        false,
+        "jarvis-recipes-server",
+        true,
       );
-      expect(result.warnings.length).toBeGreaterThan(0);
-      expect(result.warnings[0]).toContain("jarvis-recipes");
+      expect(result.enabled).toContain("jarvis-recipes-server");
+      expect(result.enabled).toHaveLength(1);
     });
 
-    it("disabling ocr-service when recipes is not enabled has no warnings", () => {
+    it("disabling a module removes it from enabled list", () => {
+      const registry = getRegistry();
+      const currentEnabled = ["jarvis-ocr-service", "jarvis-recipes-server"];
+      const result = resolveModuleToggle(
+        registry,
+        currentEnabled,
+        "jarvis-recipes-server",
+        false,
+      );
+      expect(result.enabled).not.toContain("jarvis-recipes-server");
+      expect(result.enabled).toContain("jarvis-ocr-service");
+    });
+
+    it("disabling a module with no dependents has no warnings", () => {
       const registry = getRegistry();
       const currentEnabled = ["jarvis-ocr-service"];
       const result = resolveModuleToggle(
@@ -66,57 +66,57 @@ describe("dependency-resolver", () => {
       expect(result.enabled).not.toContain("jarvis-ocr-service");
     });
 
-    it("disabling a module removes it from enabled list", () => {
+    it("enabling multiple modules independently", () => {
       const registry = getRegistry();
-      const currentEnabled = ["jarvis-ocr-service", "jarvis-recipes"];
-      const result = resolveModuleToggle(
-        registry,
-        currentEnabled,
-        "jarvis-recipes",
-        false,
-      );
-      expect(result.enabled).not.toContain("jarvis-recipes");
+      let currentEnabled: string[] = [];
+
+      const r1 = resolveModuleToggle(registry, currentEnabled, "jarvis-whisper-api", true);
+      currentEnabled = r1.enabled;
+
+      const r2 = resolveModuleToggle(registry, currentEnabled, "jarvis-tts", true);
+      currentEnabled = r2.enabled;
+
+      expect(currentEnabled).toContain("jarvis-whisper-api");
+      expect(currentEnabled).toContain("jarvis-tts");
+      expect(currentEnabled).toHaveLength(2);
     });
   });
 
   describe("getRequiredDependencies", () => {
-    it("returns optional service dependencies for a service", () => {
-      const registry = getRegistry();
-      const deps = getRequiredDependencies(registry, "jarvis-recipes");
-      // recipes depends on ocr-service (optional), and postgres + auth (core/infra - not returned)
-      expect(deps).toContain("jarvis-ocr-service");
-    });
-
-    it("returns empty array for a service with no optional dependencies", () => {
+    it("returns empty for services with no optional dependencies", () => {
       const registry = getRegistry();
       const deps = getRequiredDependencies(registry, "jarvis-ocr-service");
       expect(deps).toHaveLength(0);
     });
 
+    it("returns empty for recipes (depends only on core/infra)", () => {
+      const registry = getRegistry();
+      const deps = getRequiredDependencies(registry, "jarvis-recipes-server");
+      expect(deps).toHaveLength(0);
+    });
+
     it("does not include core services or infrastructure in dependencies", () => {
       const registry = getRegistry();
-      const deps = getRequiredDependencies(registry, "jarvis-recipes");
+      const deps = getRequiredDependencies(registry, "jarvis-recipes-server");
       expect(deps).not.toContain("postgres");
       expect(deps).not.toContain("jarvis-auth");
+      expect(deps).not.toContain("jarvis-config-service");
+    });
+
+    it("returns empty for unknown service", () => {
+      const registry = getRegistry();
+      const deps = getRequiredDependencies(registry, "nonexistent");
+      expect(deps).toHaveLength(0);
     });
   });
 
   describe("validateModuleSelection", () => {
-    it("returns no errors for a valid selection", () => {
+    it("returns valid for a valid selection", () => {
       const registry = getRegistry();
-      const enabled = ["jarvis-ocr-service", "jarvis-recipes"];
+      const enabled = ["jarvis-ocr-service", "jarvis-recipes-server"];
       const result = validateModuleSelection(registry, enabled);
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
-    });
-
-    it("returns errors when a dependency is missing", () => {
-      const registry = getRegistry();
-      const enabled = ["jarvis-recipes"]; // missing ocr-service
-      const result = validateModuleSelection(registry, enabled);
-      expect(result.valid).toBe(false);
-      expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors[0]).toContain("jarvis-ocr-service");
     });
 
     it("returns valid for empty selection", () => {
@@ -126,9 +126,8 @@ describe("dependency-resolver", () => {
       expect(result.errors).toHaveLength(0);
     });
 
-    it("only validates optional service dependencies, not core/infra", () => {
+    it("returns valid for single service (no cross-optional deps)", () => {
       const registry = getRegistry();
-      // ocr-service depends on nothing optional, so it's valid alone
       const result = validateModuleSelection(registry, ["jarvis-ocr-service"]);
       expect(result.valid).toBe(true);
     });

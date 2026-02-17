@@ -14,7 +14,7 @@ describe("service-registry", () => {
   describe("parseRegistry", () => {
     it("parses the JSON registry into typed objects", () => {
       const registry = parseRegistry(registryJson);
-      expect(registry.version).toBe("1.0.0");
+      expect(registry.version).toBe("2.0.0");
       expect(registry.services.length).toBeGreaterThan(0);
       expect(registry.infrastructure.length).toBeGreaterThan(0);
     });
@@ -30,6 +30,21 @@ describe("service-registry", () => {
       expect(auth!.healthCheck).toBe("/health");
       expect(auth!.dependsOn).toContain("postgres");
       expect(auth!.envVars.length).toBeGreaterThan(0);
+    });
+
+    it("preserves database and dbDriverPrefix fields", () => {
+      const registry = parseRegistry(registryJson);
+      const auth = registry.services.find((s) => s.id === "jarvis-auth");
+      expect(auth!.database).toBe("jarvis_auth");
+      expect(auth!.dbDriverPrefix).toBe("postgresql+psycopg2://");
+    });
+
+    it("preserves modelOptions for whisper", () => {
+      const registry = parseRegistry(registryJson);
+      const whisper = registry.services.find((s) => s.id === "jarvis-whisper-api");
+      expect(whisper!.modelOptions).toBeDefined();
+      expect(whisper!.modelOptions!.length).toBeGreaterThan(0);
+      expect(whisper!.modelOptions![0]!.id).toBe("base.en");
     });
 
     it("preserves all infrastructure fields", () => {
@@ -51,18 +66,14 @@ describe("service-registry", () => {
       expect(core.every((s) => s.category === "core")).toBe(true);
     });
 
-    it("includes auth, command-center, whisper, tts, logs, config, mcp, admin", () => {
+    it("includes config-service, auth, logs, command-center", () => {
       const registry = parseRegistry(registryJson);
       const core = getCoreServices(registry);
       const ids = core.map((s) => s.id);
-      expect(ids).toContain("jarvis-auth");
-      expect(ids).toContain("jarvis-command-center");
-      expect(ids).toContain("jarvis-whisper");
-      expect(ids).toContain("jarvis-tts");
-      expect(ids).toContain("jarvis-logs");
       expect(ids).toContain("jarvis-config-service");
-      expect(ids).toContain("jarvis-mcp");
-      expect(ids).toContain("jarvis-admin");
+      expect(ids).toContain("jarvis-auth");
+      expect(ids).toContain("jarvis-logs");
+      expect(ids).toContain("jarvis-command-center");
     });
   });
 
@@ -74,12 +85,15 @@ describe("service-registry", () => {
       expect(optional.every((s) => s.category === "optional")).toBe(true);
     });
 
-    it("includes ocr and recipes", () => {
+    it("includes whisper-api, tts, mcp, ocr, recipes", () => {
       const registry = parseRegistry(registryJson);
       const optional = getOptionalServices(registry);
       const ids = optional.map((s) => s.id);
+      expect(ids).toContain("jarvis-whisper-api");
+      expect(ids).toContain("jarvis-tts");
+      expect(ids).toContain("jarvis-mcp");
       expect(ids).toContain("jarvis-ocr-service");
-      expect(ids).toContain("jarvis-recipes");
+      expect(ids).toContain("jarvis-recipes-server");
     });
   });
 
@@ -146,8 +160,8 @@ describe("service-registry", () => {
 
     it("returns empty array when no infra is needed", () => {
       const registry = parseRegistry(registryJson);
-      // whisper has no infra dependencies
-      const infra = getRequiredInfrastructure(registry, ["jarvis-whisper"]);
+      // whisper-api depends on jarvis-auth and jarvis-config-service (not infra)
+      const infra = getRequiredInfrastructure(registry, ["jarvis-whisper-api"]);
       expect(infra).toEqual([]);
     });
   });

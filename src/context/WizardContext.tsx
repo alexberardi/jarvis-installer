@@ -6,14 +6,12 @@ const TOTAL_STEPS = 3;
 const initialState: WizardState = {
   currentStep: 0,
   totalSteps: TOTAL_STEPS,
-  inferenceMode: "gpu",
-  detectedGpu: null,
-  vramMb: 0,
-  ramGb: 16,
-  recommendation: null,
-  wakeWord: "jarvis",
   enabledModules: [],
-  outputMode: "command",
+  portOverrides: {},
+  infraPortOverrides: {},
+  secrets: {},
+  dbUser: "jarvis",
+  whisperModel: "base.en",
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -28,18 +26,6 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
       return { ...state, currentStep: Math.min(state.currentStep + 1, state.totalSteps - 1) };
     case "PREV_STEP":
       return { ...state, currentStep: Math.max(state.currentStep - 1, 0) };
-    case "SET_INFERENCE_MODE":
-      return { ...state, inferenceMode: action.mode };
-    case "SET_DETECTED_GPU":
-      return { ...state, detectedGpu: action.gpu };
-    case "SET_VRAM":
-      return { ...state, vramMb: action.vramMb };
-    case "SET_RAM":
-      return { ...state, ramGb: action.ramGb };
-    case "SET_RECOMMENDATION":
-      return { ...state, recommendation: action.recommendation };
-    case "SET_WAKE_WORD":
-      return { ...state, wakeWord: action.wakeWord };
     case "SET_ENABLED_MODULES":
       return { ...state, enabledModules: action.modules };
     case "TOGGLE_MODULE": {
@@ -54,8 +40,27 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
         enabledModules: state.enabledModules.filter((m) => m !== action.serviceId),
       };
     }
-    case "SET_OUTPUT_MODE":
-      return { ...state, outputMode: action.mode };
+    case "SET_PORT_OVERRIDE":
+      return {
+        ...state,
+        portOverrides: { ...state.portOverrides, [action.serviceId]: action.port },
+      };
+    case "SET_INFRA_PORT_OVERRIDE":
+      return {
+        ...state,
+        infraPortOverrides: { ...state.infraPortOverrides, [action.infraId]: action.port },
+      };
+    case "SET_SECRET":
+      return {
+        ...state,
+        secrets: { ...state.secrets, [action.name]: action.value },
+      };
+    case "REGENERATE_SECRETS":
+      return { ...state, secrets: action.secrets };
+    case "SET_DB_USER":
+      return { ...state, dbUser: action.user };
+    case "SET_WHISPER_MODEL":
+      return { ...state, whisperModel: action.model };
     default:
       return state;
   }

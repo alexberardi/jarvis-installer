@@ -1,34 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { generateReadme } from "@/lib/readme-generator";
 import { parseRegistry } from "@/lib/service-registry";
-import type { WizardState } from "@/types/wizard";
+import { makeState } from "../helpers/make-state";
 import registryJson from "../../public/service-registry.json";
 
 const registry = parseRegistry(registryJson);
-
-function makeState(overrides: Partial<WizardState> = {}): WizardState {
-  return {
-    currentStep: 3,
-    totalSteps: 3,
-    inferenceMode: "gpu",
-    detectedGpu: null,
-    vramMb: 8192,
-    ramGb: 16,
-    recommendation: {
-      modelId: "llama-3.1-8b-instruct",
-      modelName: "Llama 3.1 8B Instruct",
-      quantization: "q4_k_m",
-      gpuLayers: "all",
-      estimatedVramMb: 5000,
-      tier: "medium",
-      description: "Test",
-    },
-    wakeWord: "jarvis",
-    enabledModules: [],
-    outputMode: "command",
-    ...overrides,
-  };
-}
 
 describe("readme-generator", () => {
   it("generates markdown content", () => {
@@ -37,28 +13,45 @@ describe("readme-generator", () => {
     expect(readme).toContain("##");
   });
 
-  it("includes hardware summary", () => {
-    const readme = generateReadme(makeState({ inferenceMode: "gpu", vramMb: 8192 }), registry);
-    expect(readme).toContain("GPU");
-    expect(readme).toContain("8192");
+  it("includes quick start instructions", () => {
+    const readme = generateReadme(makeState(), registry);
+    expect(readme).toContain("docker compose up -d");
   });
 
-  it("includes selected modules", () => {
+  it("includes core services section", () => {
+    const readme = generateReadme(makeState(), registry);
+    expect(readme).toContain("### Core");
+    expect(readme).toContain("Auth Service");
+    expect(readme).toContain("Command Center");
+  });
+
+  it("includes optional services when enabled", () => {
     const readme = generateReadme(
-      makeState({ enabledModules: ["jarvis-recipes"] }),
+      makeState({ enabledModules: ["jarvis-recipes-server"] }),
       registry,
     );
-    expect(readme).toContain("Recipes");
+    expect(readme).toContain("### Optional");
+    expect(readme).toContain("Recipes Service");
   });
 
-  it("includes docker compose command", () => {
+  it("includes health check commands", () => {
     const readme = generateReadme(makeState(), registry);
-    expect(readme).toContain("docker compose");
+    expect(readme).toContain("curl http://localhost:");
+    expect(readme).toContain("/health");
   });
 
-  it("includes model information", () => {
+  it("includes database section", () => {
     const readme = generateReadme(makeState(), registry);
-    expect(readme).toContain("Llama 3.1 8B");
-    expect(readme).toContain("q4_k_m");
+    expect(readme).toContain("## Database");
+    expect(readme).toContain("jarvis_auth");
+    expect(readme).toContain("jarvis_config");
+  });
+
+  it("shows port overrides in service list", () => {
+    const readme = generateReadme(
+      makeState({ portOverrides: { "jarvis-auth": 9007 } }),
+      registry,
+    );
+    expect(readme).toContain("port 9007");
   });
 });

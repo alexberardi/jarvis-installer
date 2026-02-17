@@ -1,35 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { generateZipBundle } from "@/lib/zip-bundle";
 import { parseRegistry } from "@/lib/service-registry";
-import type { WizardState } from "@/types/wizard";
+import { makeState } from "../helpers/make-state";
 import registryJson from "../../public/service-registry.json";
 import JSZip from "jszip";
 
 const registry = parseRegistry(registryJson);
-
-function makeState(overrides: Partial<WizardState> = {}): WizardState {
-  return {
-    currentStep: 3,
-    totalSteps: 3,
-    inferenceMode: "gpu",
-    detectedGpu: null,
-    vramMb: 8192,
-    ramGb: 16,
-    recommendation: {
-      modelId: "llama-3.1-8b-instruct",
-      modelName: "Llama 3.1 8B Instruct",
-      quantization: "q4_k_m",
-      gpuLayers: "all",
-      estimatedVramMb: 5000,
-      tier: "medium",
-      description: "Test",
-    },
-    wakeWord: "jarvis",
-    enabledModules: [],
-    outputMode: "bundle",
-    ...overrides,
-  };
-}
 
 describe("zip-bundle", () => {
   it("generates a zip blob", async () => {
@@ -56,10 +32,16 @@ describe("zip-bundle", () => {
     expect(zip.files["jarvis/README.md"]).toBeDefined();
   });
 
-  it("contains service-registry.json", async () => {
+  it("contains init-db.sh", async () => {
     const blob = await generateZipBundle(makeState(), registry);
     const zip = await JSZip.loadAsync(blob);
-    expect(zip.files["jarvis/service-registry.json"]).toBeDefined();
+    expect(zip.files["jarvis/init-db.sh"]).toBeDefined();
+  });
+
+  it("does not contain service-registry.json", async () => {
+    const blob = await generateZipBundle(makeState(), registry);
+    const zip = await JSZip.loadAsync(blob);
+    expect(zip.files["jarvis/service-registry.json"]).toBeUndefined();
   });
 
   it("docker-compose.yml has valid content", async () => {
@@ -74,6 +56,15 @@ describe("zip-bundle", () => {
     const blob = await generateZipBundle(makeState(), registry);
     const zip = await JSZip.loadAsync(blob);
     const content = await zip.files["jarvis/.env"]!.async("string");
-    expect(content).toContain("INFERENCE_MODE=gpu");
+    expect(content).toContain("AUTH_SECRET_KEY=");
+    expect(content).toContain("DB_USER=jarvis");
+  });
+
+  it("init-db.sh has valid content", async () => {
+    const blob = await generateZipBundle(makeState(), registry);
+    const zip = await JSZip.loadAsync(blob);
+    const content = await zip.files["jarvis/init-db.sh"]!.async("string");
+    expect(content).toContain("#!/bin/bash");
+    expect(content).toContain("CREATE DATABASE");
   });
 });

@@ -23,7 +23,6 @@ function renderModulesStep() {
 describe("ModulesStep", () => {
   it("renders core services as always-on", async () => {
     renderModulesStep();
-    // Wait for registry to load
     const coreSection = await screen.findByTestId("core-services");
     expect(coreSection).toBeInTheDocument();
     expect(within(coreSection).getByText(/auth service/i)).toBeInTheDocument();
@@ -44,21 +43,18 @@ describe("ModulesStep", () => {
     expect(screen.getByText(/optical character recognition/i)).toBeInTheDocument();
   });
 
+  it("shows port numbers next to service names", async () => {
+    renderModulesStep();
+    await screen.findByTestId("core-services");
+    // Auth service should show :8007
+    expect(screen.getByText(":8007")).toBeInTheDocument();
+  });
+
   it("toggles an optional module on", async () => {
     renderModulesStep();
     const user = userEvent.setup();
     const toggle = await screen.findByTestId("toggle-jarvis-ocr-service");
     await user.click(toggle);
     expect(toggle).toHaveAttribute("aria-checked", "true");
-  });
-
-  it("enabling recipes auto-enables OCR", async () => {
-    renderModulesStep();
-    const user = userEvent.setup();
-    const recipesToggle = await screen.findByTestId("toggle-jarvis-recipes");
-    await user.click(recipesToggle);
-    // OCR should also be checked
-    const ocrToggle = screen.getByTestId("toggle-jarvis-ocr-service");
-    expect(ocrToggle).toHaveAttribute("aria-checked", "true");
   });
 });

@@ -3,14 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import App from "@/App";
 
-// Mock gpu-detect for HardwareStep
-vi.mock("@/lib/gpu-detect", () => ({
-  detectGpu: vi.fn().mockResolvedValue(null),
-  parseGpuName: vi.fn((s: string) => s),
-  estimateVramFromName: vi.fn(() => null),
-}));
-
-// Mock fetch for ModulesStep/OutputStep
+// Mock fetch for service-registry.json
 const registryJson = await import("../public/service-registry.json");
 vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
   ok: true,
@@ -34,8 +27,8 @@ describe("App", () => {
       </MemoryRouter>,
     );
     // Wizard shell should render step indicators
-    expect(screen.getByText("Hardware")).toBeInTheDocument();
-    expect(screen.getByText("Modules")).toBeInTheDocument();
+    expect(screen.getByText("Services")).toBeInTheDocument();
+    expect(screen.getByText("Configure")).toBeInTheDocument();
     expect(screen.getByText("Install")).toBeInTheDocument();
   });
 });
