@@ -14,8 +14,6 @@ QUANTIZATION=""
 GPU_LAYERS=""
 MODULES=""
 WAKE_WORD="jarvis"
-HA_URL=""
-HA_TOKEN=""
 
 # ─── Parse Arguments ────────────────────────────────────────────────────────
 
@@ -45,14 +43,6 @@ while [[ $# -gt 0 ]]; do
       WAKE_WORD="$2"
       shift 2
       ;;
-    --ha-url)
-      HA_URL="$2"
-      shift 2
-      ;;
-    --ha-token)
-      HA_TOKEN="$2"
-      shift 2
-      ;;
     --help)
       echo "Usage: install.sh [options]"
       echo ""
@@ -63,8 +53,6 @@ while [[ $# -gt 0 ]]; do
       echo "  --gpu-layers <n|all>      Number of GPU layers (or 'all')"
       echo "  --modules <list>          Comma-separated optional modules"
       echo "  --wake-word <word>        Wake word (default: jarvis)"
-      echo "  --ha-url <url>            Home Assistant URL"
-      echo "  --ha-token <token>        Home Assistant access token"
       exit 0
       ;;
     *)
@@ -175,16 +163,6 @@ WAKE_WORD=${WAKE_WORD}
 # Grafana
 GF_SECURITY_ADMIN_PASSWORD=$(generate_secret | head -c 16)
 ENVEOF
-
-# Add HA config if provided
-if [[ -n "$HA_URL" ]]; then
-  cat >> .env << HAEOF
-
-# Home Assistant
-HA_URL=${HA_URL}
-HA_TOKEN=${HA_TOKEN}
-HAEOF
-fi
 
 ok "Generated .env with secure random secrets"
 

@@ -1,6 +1,6 @@
 import { useWizard } from "@/context/WizardContext";
 
-const STEP_LABELS = ["Hardware", "Integrations", "Modules", "Install"];
+const STEP_LABELS = ["Hardware", "Modules", "Install"];
 
 export default function WizardShell() {
   const { state, dispatch } = useWizard();

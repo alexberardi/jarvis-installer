@@ -13,16 +13,15 @@ function renderWizardShell() {
 }
 
 describe("WizardShell", () => {
-  it("renders 4 step indicators", () => {
+  it("renders 3 step indicators", () => {
     renderWizardShell();
     const indicators = screen.getAllByTestId(/^step-indicator-/);
-    expect(indicators).toHaveLength(4);
+    expect(indicators).toHaveLength(3);
   });
 
   it("renders step labels", () => {
     renderWizardShell();
     expect(screen.getByText("Hardware")).toBeInTheDocument();
-    expect(screen.getByText("Integrations")).toBeInTheDocument();
     expect(screen.getByText("Modules")).toBeInTheDocument();
     expect(screen.getByText("Install")).toBeInTheDocument();
   });

@@ -11,7 +11,7 @@ export default function OutputStep() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    fetch("/service-registry.json")
+    fetch(`${import.meta.env.BASE_URL}service-registry.json`)
       .then((res) => res.json())
       .then((json) => setRegistry(parseRegistry(json)));
   }, []);

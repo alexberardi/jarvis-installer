@@ -9,7 +9,7 @@ const registry = parseRegistry(registryJson);
 function makeState(overrides: Partial<WizardState> = {}): WizardState {
   return {
     currentStep: 3,
-    totalSteps: 4,
+    totalSteps: 3,
     inferenceMode: "gpu",
     detectedGpu: null,
     vramMb: 8192,
@@ -23,7 +23,6 @@ function makeState(overrides: Partial<WizardState> = {}): WizardState {
       tier: "medium",
       description: "Test",
     },
-    homeAssistant: { enabled: false, url: "", token: "" },
     wakeWord: "jarvis",
     enabledModules: [],
     outputMode: "command",

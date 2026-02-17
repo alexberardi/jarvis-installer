@@ -5,7 +5,7 @@ import type { WizardState } from "@/types/wizard";
 function makeState(overrides: Partial<WizardState> = {}): WizardState {
   return {
     currentStep: 3,
-    totalSteps: 4,
+    totalSteps: 3,
     inferenceMode: "gpu",
     detectedGpu: null,
     vramMb: 8192,
@@ -19,7 +19,6 @@ function makeState(overrides: Partial<WizardState> = {}): WizardState {
       tier: "medium",
       description: "Test",
     },
-    homeAssistant: { enabled: false, url: "", token: "" },
     wakeWord: "jarvis",
     enabledModules: [],
     outputMode: "command",
@@ -81,22 +80,6 @@ describe("install-command", () => {
   it("omits modules flag when none selected", () => {
     const cmd = generateInstallCommand(makeState({ enabledModules: [] }));
     expect(cmd).not.toContain("--modules");
-  });
-
-  it("includes HA config when enabled", () => {
-    const cmd = generateInstallCommand(
-      makeState({
-        homeAssistant: { enabled: true, url: "http://ha.local:8123", token: "mytoken" },
-      }),
-    );
-    expect(cmd).toContain("--ha-url http://ha.local:8123");
-    expect(cmd).toContain("--ha-token mytoken");
-  });
-
-  it("omits HA flags when disabled", () => {
-    const cmd = generateInstallCommand(makeState());
-    expect(cmd).not.toContain("--ha-url");
-    expect(cmd).not.toContain("--ha-token");
   });
 
   it("includes wake word flag", () => {

@@ -9,10 +9,10 @@ function wrapper({ children }: { children: ReactNode }) {
 
 describe("WizardContext", () => {
   describe("initial state", () => {
-    it("starts at step 0 with 4 total steps", () => {
+    it("starts at step 0 with 3 total steps", () => {
       const { result } = renderHook(() => useWizard(), { wrapper });
       expect(result.current.state.currentStep).toBe(0);
-      expect(result.current.state.totalSteps).toBe(4);
+      expect(result.current.state.totalSteps).toBe(3);
     });
 
     it("defaults to gpu inference mode", () => {
@@ -23,11 +23,6 @@ describe("WizardContext", () => {
     it("defaults to no detected GPU", () => {
       const { result } = renderHook(() => useWizard(), { wrapper });
       expect(result.current.state.detectedGpu).toBeNull();
-    });
-
-    it("defaults to home assistant disabled", () => {
-      const { result } = renderHook(() => useWizard(), { wrapper });
-      expect(result.current.state.homeAssistant.enabled).toBe(false);
     });
 
     it("defaults to empty enabled modules", () => {
@@ -64,9 +59,9 @@ describe("WizardContext", () => {
     it("does not go above totalSteps - 1", () => {
       const { result } = renderHook(() => useWizard(), { wrapper });
       // Go to last step
-      act(() => result.current.dispatch({ type: "SET_STEP", step: 3 }));
+      act(() => result.current.dispatch({ type: "SET_STEP", step: 2 }));
       act(() => result.current.dispatch({ type: "NEXT_STEP" }));
-      expect(result.current.state.currentStep).toBe(3);
+      expect(result.current.state.currentStep).toBe(2);
     });
 
     it("sets step directly", () => {
@@ -78,7 +73,7 @@ describe("WizardContext", () => {
     it("clamps SET_STEP to valid bounds", () => {
       const { result } = renderHook(() => useWizard(), { wrapper });
       act(() => result.current.dispatch({ type: "SET_STEP", step: 99 }));
-      expect(result.current.state.currentStep).toBe(3);
+      expect(result.current.state.currentStep).toBe(2);
       act(() => result.current.dispatch({ type: "SET_STEP", step: -5 }));
       expect(result.current.state.currentStep).toBe(0);
     });
@@ -126,27 +121,7 @@ describe("WizardContext", () => {
     });
   });
 
-  describe("integration actions", () => {
-    it("sets home assistant config partially", () => {
-      const { result } = renderHook(() => useWizard(), { wrapper });
-      act(() => result.current.dispatch({ type: "SET_HOME_ASSISTANT", config: { enabled: true } }));
-      expect(result.current.state.homeAssistant.enabled).toBe(true);
-      expect(result.current.state.homeAssistant.url).toBe("");
-    });
-
-    it("sets home assistant URL and token", () => {
-      const { result } = renderHook(() => useWizard(), { wrapper });
-      act(() =>
-        result.current.dispatch({
-          type: "SET_HOME_ASSISTANT",
-          config: { enabled: true, url: "http://ha.local:8123", token: "abc123" },
-        }),
-      );
-      expect(result.current.state.homeAssistant.enabled).toBe(true);
-      expect(result.current.state.homeAssistant.url).toBe("http://ha.local:8123");
-      expect(result.current.state.homeAssistant.token).toBe("abc123");
-    });
-
+  describe("wake word", () => {
     it("sets wake word", () => {
       const { result } = renderHook(() => useWizard(), { wrapper });
       act(() => result.current.dispatch({ type: "SET_WAKE_WORD", wakeWord: "hey jarvis" }));

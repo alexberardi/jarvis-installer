@@ -11,12 +11,7 @@ export interface WizardState {
   ramGb: number;
   recommendation: ModelRecommendation | null;
 
-  // Step 2: Integrations
-  homeAssistant: {
-    enabled: boolean;
-    url: string;
-    token: string;
-  };
+  // Step 2: Modules
   wakeWord: string;
 
   // Step 3: Modules
@@ -35,7 +30,6 @@ export type WizardAction =
   | { type: "SET_VRAM"; vramMb: number }
   | { type: "SET_RAM"; ramGb: number }
   | { type: "SET_RECOMMENDATION"; recommendation: ModelRecommendation }
-  | { type: "SET_HOME_ASSISTANT"; config: Partial<WizardState["homeAssistant"]> }
   | { type: "SET_WAKE_WORD"; wakeWord: string }
   | { type: "SET_ENABLED_MODULES"; modules: string[] }
   | { type: "TOGGLE_MODULE"; serviceId: string; enabled: boolean }

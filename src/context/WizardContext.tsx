@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, type ReactNode, type Dispatch } from "react";
 import type { WizardState, WizardAction } from "@/types/wizard";
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 3;
 
 const initialState: WizardState = {
   currentStep: 0,
@@ -11,11 +11,6 @@ const initialState: WizardState = {
   vramMb: 0,
   ramGb: 16,
   recommendation: null,
-  homeAssistant: {
-    enabled: false,
-    url: "",
-    token: "",
-  },
   wakeWord: "jarvis",
   enabledModules: [],
   outputMode: "command",
@@ -43,8 +38,6 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
       return { ...state, ramGb: action.ramGb };
     case "SET_RECOMMENDATION":
       return { ...state, recommendation: action.recommendation };
-    case "SET_HOME_ASSISTANT":
-      return { ...state, homeAssistant: { ...state.homeAssistant, ...action.config } };
     case "SET_WAKE_WORD":
       return { ...state, wakeWord: action.wakeWord };
     case "SET_ENABLED_MODULES":

@@ -9,7 +9,7 @@ const registry = parseRegistry(registryJson);
 function makeState(overrides: Partial<WizardState> = {}): WizardState {
   return {
     currentStep: 3,
-    totalSteps: 4,
+    totalSteps: 3,
     inferenceMode: "gpu",
     detectedGpu: null,
     vramMb: 8192,
@@ -23,7 +23,6 @@ function makeState(overrides: Partial<WizardState> = {}): WizardState {
       tier: "medium",
       description: "Test",
     },
-    homeAssistant: { enabled: false, url: "", token: "" },
     wakeWord: "jarvis",
     enabledModules: [],
     outputMode: "command",
@@ -75,23 +74,6 @@ describe("env-generator", () => {
     const env = generateEnv(makeState(), registry);
     expect(env).toContain("MODEL_ID=mistral-7b-instruct-v0.3");
     expect(env).toContain("QUANTIZATION=q4_k_m");
-  });
-
-  it("includes HA vars when enabled", () => {
-    const env = generateEnv(
-      makeState({
-        homeAssistant: { enabled: true, url: "http://ha.local:8123", token: "abc" },
-      }),
-      registry,
-    );
-    expect(env).toContain("HA_URL=http://ha.local:8123");
-    expect(env).toContain("HA_TOKEN=abc");
-  });
-
-  it("omits HA vars when disabled", () => {
-    const env = generateEnv(makeState(), registry);
-    expect(env).not.toContain("HA_URL");
-    expect(env).not.toContain("HA_TOKEN");
   });
 
   it("includes placeholder secrets", () => {

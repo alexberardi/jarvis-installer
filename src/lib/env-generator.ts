@@ -43,14 +43,6 @@ export function generateEnv(state: WizardState, _registry: ServiceRegistry): str
   lines.push(`WAKE_WORD=${state.wakeWord}`);
   lines.push("");
 
-  // Home Assistant
-  if (state.homeAssistant.enabled) {
-    lines.push("# Home Assistant");
-    lines.push(`HA_URL=${state.homeAssistant.url}`);
-    lines.push(`HA_TOKEN=${state.homeAssistant.token}`);
-    lines.push("");
-  }
-
   // Grafana
   lines.push("# Grafana");
   lines.push("GF_SECURITY_ADMIN_PASSWORD=jarvis");

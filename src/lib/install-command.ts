@@ -26,16 +26,6 @@ export function generateInstallCommand(state: WizardState): string {
     flags.push(`--modules ${state.enabledModules.join(",")}`);
   }
 
-  // Home Assistant
-  if (state.homeAssistant.enabled) {
-    if (state.homeAssistant.url) {
-      flags.push(`--ha-url ${state.homeAssistant.url}`);
-    }
-    if (state.homeAssistant.token) {
-      flags.push(`--ha-token ${state.homeAssistant.token}`);
-    }
-  }
-
   const flagStr = flags.join(" \\\n  ");
   return `curl -fsSL ${INSTALL_SCRIPT_URL} | bash -s -- \\\n  ${flagStr}`;
 }

@@ -35,7 +35,6 @@ describe("App", () => {
     );
     // Wizard shell should render step indicators
     expect(screen.getByText("Hardware")).toBeInTheDocument();
-    expect(screen.getByText("Integrations")).toBeInTheDocument();
     expect(screen.getByText("Modules")).toBeInTheDocument();
     expect(screen.getByText("Install")).toBeInTheDocument();
   });
