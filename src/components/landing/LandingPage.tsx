@@ -27,7 +27,7 @@ export default function LandingPage() {
         <img
           src={`${import.meta.env.BASE_URL}logo.png`}
           alt="Jarvis"
-          className="mx-auto mb-6 w-48"
+          className="mx-auto mb-8 w-80"
         />
         <h1 className="sr-only">Jarvis</h1>
         <p className="text-xl text-[var(--color-text-secondary)]">
