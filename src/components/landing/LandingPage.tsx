@@ -24,10 +24,13 @@ export default function LandingPage() {
     <div className="min-h-screen">
       {/* Hero */}
       <header className="mx-auto max-w-4xl px-6 py-24 text-center">
-        <h1 className="text-5xl font-bold tracking-tight">
-          <span className="text-[var(--color-accent)]">Jarvis</span>
-        </h1>
-        <p className="mt-4 text-xl text-[var(--color-text-secondary)]">
+        <img
+          src={`${import.meta.env.BASE_URL}logo.png`}
+          alt="Jarvis"
+          className="mx-auto mb-6 w-48"
+        />
+        <h1 className="sr-only">Jarvis</h1>
+        <p className="text-xl text-[var(--color-text-secondary)]">
           Your personal voice assistant. Private, self-hosted, and open source.
         </p>
         <div className="mt-8 flex justify-center gap-4">

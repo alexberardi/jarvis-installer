@@ -12,8 +12,9 @@ function renderLandingPage() {
 }
 
 describe("LandingPage", () => {
-  it("renders hero heading", () => {
+  it("renders logo and accessible heading", () => {
     renderLandingPage();
+    expect(screen.getByRole("img", { name: "Jarvis" })).toBeInTheDocument();
     const heading = screen.getByRole("heading", { level: 1 });
     expect(heading).toBeInTheDocument();
     expect(heading.textContent).toContain("Jarvis");
