@@ -25,7 +25,7 @@ export default function LandingPage() {
       {/* Hero */}
       <header className="mx-auto max-w-4xl px-6 py-24 text-center">
         <img
-          src={`${import.meta.env.BASE_URL}logo.png`}
+          src={`${import.meta.env.BASE_URL}jarvis_indigo500_transparent-logo.png`}
           alt="Jarvis"
           className="mx-auto mb-8 w-[30rem]"
         />
