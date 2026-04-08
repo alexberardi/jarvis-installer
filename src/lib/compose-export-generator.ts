@@ -153,6 +153,7 @@ export function generateComposeExport(
     lines.push("  loki:");
     lines.push("    image: grafana/loki:2.9.0");
     lines.push("    container_name: jarvis-loki");
+    lines.push("    user: \"0\"");
     lines.push("    ports:");
     lines.push(`      - "${lokiHostPort}:3100"`);
     lines.push("    volumes:");
@@ -190,7 +191,7 @@ export function generateComposeExport(
     lines.push("    container_name: jarvis-mosquitto");
     lines.push("    ports:");
     lines.push(`      - "${mqttHostPort}:1883"`);
-    lines.push('    command: sh -c "echo -e \'listener 1883\\nallow_anonymous true\' > /tmp/mosquitto.conf && exec mosquitto -c /tmp/mosquitto.conf -v"');
+    lines.push('    command: sh -c "printf \'listener 1883\\nallow_anonymous true\\n\' > /tmp/mosquitto.conf && exec mosquitto -c /tmp/mosquitto.conf -v"');
     lines.push("    volumes:");
     lines.push(`      - ${storagePath}/mosquitto:/mosquitto/data`);
     lines.push("    networks:");
