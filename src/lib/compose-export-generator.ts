@@ -101,20 +101,21 @@ export function generateComposeExport(
     lines.push(`      POSTGRES_USER: "${secrets.dbUser}"`);
     lines.push(`      POSTGRES_PASSWORD: "${secrets.pgPassword}"`);
     lines.push(`      POSTGRES_DB: "${primaryDb}"`);
+    // Create additional databases via init script + entrypoint override
     if (additionalDbs.length > 0) {
-      const createLines = additionalDbs.map(
-        (db) => `SELECT 'CREATE DATABASE ${db}' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${db}')\\\\gexec`,
-      );
-      lines.push("    command:");
-      lines.push("      - bash");
-      lines.push("      - -c");
-      lines.push("      - |");
-      lines.push(`        cat > /docker-entrypoint-initdb.d/init.sql << 'EOSQL'`);
-      for (const stmt of createLines) {
-        lines.push(`        ${stmt}`);
+      lines.push("    entrypoint:");
+      lines.push('      - sh');
+      lines.push('      - -c');
+      lines.push(`      - |`);
+      lines.push(`        cat > /docker-entrypoint-initdb.d/create-dbs.sh << 'EOSH'`);
+      lines.push(`        #!/bin/bash`);
+      lines.push(`        set -e`);
+      for (const db of additionalDbs) {
+        lines.push(`        psql -v ON_ERROR_STOP=1 --username "$$POSTGRES_USER" --dbname "$$POSTGRES_DB" -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" | grep -q 1 || psql -v ON_ERROR_STOP=1 --username "$$POSTGRES_USER" --dbname "$$POSTGRES_DB" -c "CREATE DATABASE ${db}"`);
       }
-      lines.push("        EOSQL");
-      lines.push("        exec docker-entrypoint.sh postgres");
+      lines.push(`        EOSH`);
+      lines.push(`        chmod +x /docker-entrypoint-initdb.d/create-dbs.sh`);
+      lines.push(`        exec docker-entrypoint.sh postgres`);
     }
     lines.push("    healthcheck:");
     lines.push(`      test: ["CMD-SHELL", "pg_isready -U ${secrets.dbUser}"]`);
@@ -168,6 +169,7 @@ export function generateComposeExport(
     lines.push("  grafana:");
     lines.push("    image: grafana/grafana:latest");
     lines.push("    container_name: jarvis-grafana");
+    lines.push("    user: \"0\"");
     lines.push("    ports:");
     lines.push(`      - "${grafanaHostPort}:3000"`);
     lines.push("    environment:");
@@ -188,7 +190,7 @@ export function generateComposeExport(
     lines.push("    container_name: jarvis-mosquitto");
     lines.push("    ports:");
     lines.push(`      - "${mqttHostPort}:1883"`);
-    lines.push("    command: mosquitto -c /dev/null -p 1883 -v");
+    lines.push('    command: sh -c "echo -e \'listener 1883\\nallow_anonymous true\' > /tmp/mosquitto.conf && exec mosquitto -c /tmp/mosquitto.conf -v"');
     lines.push("    volumes:");
     lines.push(`      - ${storagePath}/mosquitto:/mosquitto/data`);
     lines.push("    networks:");

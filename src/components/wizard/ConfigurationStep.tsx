@@ -174,21 +174,21 @@ export default function ConfigurationStep() {
         </section>
       )}
 
-      {/* GPU toggle — controls whether NVIDIA deploy config is included */}
+      {/* GPU toggle — opt-out: checked = no GPU (safe default for NAS/VMs) */}
       {allEnabled.some((s) => s.gpu) && (
         <section>
           <h3 className="mb-3 text-sm font-medium">GPU Acceleration</h3>
           <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
-              checked={state.gpuEnabled}
-              onChange={(e) => dispatch({ type: "SET_GPU_ENABLED", enabled: e.target.checked })}
+              checked={!state.gpuEnabled}
+              onChange={(e) => dispatch({ type: "SET_GPU_ENABLED", enabled: !e.target.checked })}
               className="h-4 w-4 rounded border-[var(--color-border)]"
             />
             <div>
-              <span className="text-sm">Enable NVIDIA GPU passthrough</span>
+              <span className="text-sm">No GPU (CPU-only inference)</span>
               <p className="text-xs text-[var(--color-text-secondary)]">
-                Requires NVIDIA Container Toolkit. Disable for CPU-only inference or machines without a GPU.
+                Uncheck if you have an NVIDIA GPU with the Container Toolkit installed.
               </p>
             </div>
           </label>
