@@ -15,7 +15,7 @@ const initialState: WizardState = {
   llmInterface: "Qwen25MediumUntrained",
   deploymentTarget: "standard",
   storagePath: "/var/lib/jarvis",
-  gpuEnabled: false,
+  gpuEnabled: true,
 };
 
 function clamp(value: number, min: number, max: number): number {
