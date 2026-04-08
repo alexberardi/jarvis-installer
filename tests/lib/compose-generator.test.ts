@@ -44,8 +44,8 @@ describe("compose-generator", () => {
 
   it("uses ${VAR} substitution for ports", () => {
     const output = generateCompose(makeState(), registry);
-    expect(output).toContain("${AUTH_PORT:-8007}");
-    expect(output).toContain("${COMMAND_CENTER_PORT:-8002}");
+    expect(output).toContain("${AUTH_PORT:-7701}");
+    expect(output).toContain("${COMMAND_CENTER_PORT:-7703}");
   });
 
   it("applies port overrides in default values", () => {

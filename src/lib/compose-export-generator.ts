@@ -212,6 +212,7 @@ export function generateComposeExport(
         appKeys,
         secrets,
         allEnabled,
+        storagePath,
       ),
     );
   }
@@ -237,6 +238,7 @@ function generateExportServiceBlock(
   appKeys: Map<string, AppKeyEntry>,
   secrets: SecretsMap,
   allEnabled: ServiceDefinition[],
+  storagePath: string,
 ): string[] {
   const lines: string[] = [];
   const hostPort = state.portOverrides[service.id] ?? service.port;
@@ -280,13 +282,26 @@ function generateExportServiceBlock(
     }
   }
 
-  // Service-specific extra env vars
-  if (service.id === "jarvis-auth") {
-    lines.push(`      JARVIS_AUTH_BASE_URL: "http://jarvis-auth:${containerPort}"`);
+  // JARVIS_AUTH_BASE_URL for services that depend on auth (not auth itself)
+  const authService = allEnabled.find((s) => s.id === "jarvis-auth");
+  if (service.id !== "jarvis-auth" && service.dependsOn.includes("jarvis-auth") && authService) {
+    const authContainerPort = getContainerPort(authService);
+    lines.push(`      JARVIS_AUTH_BASE_URL: "http://jarvis-auth:${authContainerPort}"`);
   }
 
+  // Service-specific extra env vars
   if (service.id === "jarvis-command-center" && state.llmInterface) {
     lines.push(`      LLM_INTERFACE_SEED: "${state.llmInterface}"`);
+  }
+
+  if (service.id === "jarvis-llm-proxy-api") {
+    lines.push('      MODEL_SERVICE_URL: "http://localhost:7705"');
+    lines.push('      MODEL_SERVICE_PORT: "7705"');
+    lines.push('      VLLM_WORKER_MULTIPROC_METHOD: "spawn"');
+    lines.push('      JARVIS_MODEL_BACKEND: "GGUF"');
+    lines.push('      JARVIS_MODEL_CHAT_FORMAT: "chatml"');
+    lines.push('      JARVIS_MODEL_CONTEXT_WINDOW: "32768"');
+    lines.push(`      REDIS_URL: "redis://:${secrets.redisPassword}@redis:6379/0"`);
   }
 
   if (service.id === "jarvis-settings-server") {
@@ -329,6 +344,14 @@ function generateExportServiceBlock(
     lines.push("      - |");
     lines.push("        python -m alembic upgrade head");
     lines.push(`        exec uvicorn app.main:app --host 0.0.0.0 --port ${containerPort}`);
+  } else if (service.id === "jarvis-llm-proxy-api") {
+    lines.push("    command:");
+    lines.push("      - sh");
+    lines.push("      - -c");
+    lines.push("      - |");
+    lines.push("        python -m alembic upgrade head");
+    lines.push("        python -m uvicorn services.model_service:app --host 0.0.0.0 --port 7705 &");
+    lines.push(`        exec python -m uvicorn main:app --host 0.0.0.0 --port ${containerPort}`);
   }
 
   // Dependencies
@@ -352,14 +375,27 @@ function generateExportServiceBlock(
     }
   }
 
-  // Volumes (whisper non-default model)
+  // Volumes
+  const vols: string[] = [];
   if (nonDefaultWhisper) {
-    lines.push("    volumes:");
-    lines.push("      - ./models:/models:ro");
+    vols.push("      - ./models:/models:ro");
   }
+  if (service.gpu) {
+    vols.push(`      - ${storagePath}/models:/app/.models`);
+  }
+  if (vols.length > 0) {
+    lines.push("    volumes:");
+    lines.push(...vols);
+  }
+
+  // extra_hosts for reaching host services
+  lines.push("    extra_hosts:");
+  lines.push('      - "host.docker.internal:host-gateway"');
 
   // GPU config
   if (service.gpu) {
+    lines.push("    ipc: host");
+    lines.push('    shm_size: "8gb"');
     lines.push("    deploy:");
     lines.push("      resources:");
     lines.push("        reservations:");
@@ -371,12 +407,24 @@ function generateExportServiceBlock(
 
   // Healthcheck
   lines.push("    healthcheck:");
-  lines.push(
-    `      test: ["CMD", "curl", "-f", "http://localhost:${containerPort}${service.healthCheck}"]`,
-  );
+  if (service.id === "jarvis-command-center") {
+    // CC image doesn't include curl — use python urllib
+    lines.push(
+      `      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${containerPort}${service.healthCheck}')"]`,
+    );
+  } else {
+    lines.push(
+      `      test: ["CMD", "curl", "-f", "http://localhost:${containerPort}${service.healthCheck}"]`,
+    );
+  }
   lines.push("      interval: 30s");
   lines.push("      timeout: 10s");
   lines.push("      retries: 3");
+  if (service.id === "jarvis-llm-proxy-api") {
+    lines.push("      start_period: 120s");
+  } else if (service.database) {
+    lines.push("      start_period: 30s");
+  }
 
   lines.push("    networks:");
   lines.push("      - jarvis");
@@ -400,22 +448,22 @@ function generateAuthSeedScript(
 
   return `python -m alembic upgrade head
 python -c "
-from app.db.session import SessionLocal
-from app.models.app_client import AppClient
+from jarvis_auth.app.db.session import SessionLocal
+from jarvis_auth.app.db import models
+from datetime import datetime, timezone
 db = SessionLocal()
 clients = [
 ${clientLines.join("\n")}
 ]
-for app_id, hashed_key in clients:
-    exists = db.query(AppClient).filter(AppClient.app_id == app_id).first()
-    if not exists:
-        db.add(AppClient(app_id=app_id, hashed_key=hashed_key, description='Auto-seeded by installer'))
+for app_id, key_hash in clients:
+    if not db.query(models.AppClient).filter(models.AppClient.app_id == app_id).first():
+        db.add(models.AppClient(app_id=app_id, name=app_id, key_hash=key_hash, is_active=True, created_at=datetime.now(timezone.utc)))
         print(f'Seeded app client: {app_id}')
 db.commit()
 db.close()
 print('Auth seed complete')
 "
-exec uvicorn app.main:app --host 0.0.0.0 --port ${authContainerPort}`;
+exec uvicorn jarvis_auth.app.main:app --host 0.0.0.0 --port ${authContainerPort}`;
 }
 
 function generateConfigSeedScript(
@@ -426,23 +474,22 @@ function generateConfigSeedScript(
   for (const svc of allEnabled) {
     const cPort = getContainerPort(svc);
     serviceLines.push(
-      `    ('${svc.id}', '${svc.name}', 'http://${svc.id}:${cPort}'),`,
+      `    ('${svc.id}', '${svc.id}', ${cPort}, 'http', '${svc.healthCheck}', '${svc.description.replace(/'/g, "\\'")}'),`,
     );
   }
 
   return `python -m alembic upgrade head
 python -c "
-from app.db.session import SessionLocal
-from app.models.service import Service
+from app.database import SessionLocal
+from app.models import Service
 db = SessionLocal()
 services = [
 ${serviceLines.join("\n")}
 ]
-for service_id, name, url in services:
-    exists = db.query(Service).filter(Service.service_id == service_id).first()
-    if not exists:
-        db.add(Service(service_id=service_id, name=name, url=url))
-        print(f'Registered service: {service_id} -> {url}')
+for name, host, port, scheme, health, desc in services:
+    if not db.query(Service).filter(Service.name == name).first():
+        db.add(Service(name=name, host=host, port=port, scheme=scheme, health_path=health, description=desc))
+        print(f'Registered service: {name}')
 db.commit()
 db.close()
 print('Config seed complete')

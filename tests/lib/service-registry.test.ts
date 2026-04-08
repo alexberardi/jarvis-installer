@@ -26,7 +26,7 @@ describe("service-registry", () => {
       expect(auth).toBeDefined();
       expect(auth!.name).toBe("Auth Service");
       expect(auth!.category).toBe("core");
-      expect(auth!.port).toBe(8007);
+      expect(auth!.port).toBe(7701);
       expect(auth!.image).toContain("jarvis-auth");
       expect(auth!.healthCheck).toBe("/health");
       expect(auth!.dependsOn).toContain("postgres");

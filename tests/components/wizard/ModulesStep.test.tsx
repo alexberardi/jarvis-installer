@@ -46,8 +46,8 @@ describe("ModulesStep", () => {
   it("shows port numbers next to service names", async () => {
     renderModulesStep();
     await screen.findByTestId("core-services");
-    // Auth service should show :8007
-    expect(screen.getByText(":8007")).toBeInTheDocument();
+    // Auth service should show :7701
+    expect(screen.getByText(":7701")).toBeInTheDocument();
   });
 
   it("toggles an optional module on", async () => {

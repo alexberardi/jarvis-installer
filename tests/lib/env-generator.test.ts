@@ -42,10 +42,10 @@ describe("env-generator", () => {
 
   it("includes core service ports", () => {
     const env = generateEnv(makeState(), registry);
-    expect(env).toContain("AUTH_PORT=8007");
-    expect(env).toContain("COMMAND_CENTER_PORT=8002");
-    expect(env).toContain("CONFIG_SERVICE_PORT=8013");
-    expect(env).toContain("LOGS_PORT=8006");
+    expect(env).toContain("AUTH_PORT=7701");
+    expect(env).toContain("COMMAND_CENTER_PORT=7703");
+    expect(env).toContain("CONFIG_SERVICE_PORT=7700");
+    expect(env).toContain("LOGS_PORT=7702");
   });
 
   it("includes port overrides", () => {
@@ -67,6 +67,6 @@ describe("env-generator", () => {
       makeState({ enabledModules: ["jarvis-whisper-api"] }),
       registry,
     );
-    expect(env).toContain("WHISPER_API_PORT=8012");
+    expect(env).toContain("WHISPER_API_PORT=7706");
   });
 });
