@@ -20,6 +20,7 @@ export function makeState(overrides: Partial<WizardState> = {}): WizardState {
     llmInterface: "Qwen25MediumUntrained",
     deploymentTarget: "standard",
     storagePath: "/var/lib/jarvis",
+    gpuEnabled: false,
     ...overrides,
   };
 }

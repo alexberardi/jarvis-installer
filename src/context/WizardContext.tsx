@@ -15,6 +15,7 @@ const initialState: WizardState = {
   llmInterface: "Qwen25MediumUntrained",
   deploymentTarget: "standard",
   storagePath: "/var/lib/jarvis",
+  gpuEnabled: false,
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -70,6 +71,8 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
       return { ...state, deploymentTarget: action.target };
     case "SET_STORAGE_PATH":
       return { ...state, storagePath: action.path };
+    case "SET_GPU_ENABLED":
+      return { ...state, gpuEnabled: action.enabled };
     default:
       return state;
   }

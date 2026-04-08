@@ -16,6 +16,7 @@ export interface WizardState {
   // Deployment mode
   deploymentTarget: "standard" | "compose-export";
   storagePath: string;
+  gpuEnabled: boolean;
 }
 
 export type WizardAction =
@@ -32,4 +33,5 @@ export type WizardAction =
   | { type: "SET_WHISPER_MODEL"; model: string }
   | { type: "SET_LLM_INTERFACE"; interfaceId: string }
   | { type: "SET_DEPLOYMENT_TARGET"; target: "standard" | "compose-export" }
-  | { type: "SET_STORAGE_PATH"; path: string };
+  | { type: "SET_STORAGE_PATH"; path: string }
+  | { type: "SET_GPU_ENABLED"; enabled: boolean };

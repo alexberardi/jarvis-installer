@@ -380,7 +380,7 @@ function generateExportServiceBlock(
   if (nonDefaultWhisper) {
     vols.push("      - ./models:/models:ro");
   }
-  if (service.gpu) {
+  if (service.gpu || service.id === "jarvis-llm-proxy-api") {
     vols.push(`      - ${storagePath}/models:/app/.models`);
   }
   if (vols.length > 0) {
@@ -392,8 +392,8 @@ function generateExportServiceBlock(
   lines.push("    extra_hosts:");
   lines.push('      - "host.docker.internal:host-gateway"');
 
-  // GPU config
-  if (service.gpu) {
+  // GPU config — only when user has confirmed GPU availability
+  if (service.gpu && state.gpuEnabled) {
     lines.push("    ipc: host");
     lines.push('    shm_size: "8gb"');
     lines.push("    deploy:");

@@ -174,6 +174,27 @@ export default function ConfigurationStep() {
         </section>
       )}
 
+      {/* GPU toggle — controls whether NVIDIA deploy config is included */}
+      {allEnabled.some((s) => s.gpu) && (
+        <section>
+          <h3 className="mb-3 text-sm font-medium">GPU Acceleration</h3>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={state.gpuEnabled}
+              onChange={(e) => dispatch({ type: "SET_GPU_ENABLED", enabled: e.target.checked })}
+              className="h-4 w-4 rounded border-[var(--color-border)]"
+            />
+            <div>
+              <span className="text-sm">Enable NVIDIA GPU passthrough</span>
+              <p className="text-xs text-[var(--color-text-secondary)]">
+                Requires NVIDIA Container Toolkit. Disable for CPU-only inference or machines without a GPU.
+              </p>
+            </div>
+          </label>
+        </section>
+      )}
+
       {/* Secrets */}
       <section>
         <div className="mb-3 flex items-center justify-between">
