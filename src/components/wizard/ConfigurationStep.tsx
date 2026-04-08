@@ -188,7 +188,7 @@ export default function ConfigurationStep() {
             <div>
               <span className="text-sm">No GPU (CPU-only inference)</span>
               <p className="text-xs text-[var(--color-text-secondary)]">
-                Uncheck if you have an NVIDIA GPU with the Container Toolkit installed.
+                Check if you don't have an NVIDIA GPU with the Container Toolkit installed.
               </p>
             </div>
           </label>
