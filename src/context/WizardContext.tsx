@@ -12,7 +12,7 @@ const initialState: WizardState = {
   secrets: {},
   dbUser: "jarvis",
   whisperModel: "base.en",
-  llmInterface: "JarvisToolModel",
+  llmInterface: "Qwen25MediumUntrained",
   deploymentTarget: "standard",
   storagePath: "/var/lib/jarvis",
 };

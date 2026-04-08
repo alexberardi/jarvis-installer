@@ -65,7 +65,7 @@ export default function ConfigurationStep() {
   const databases = allEnabled.filter((s) => s.database).map((s) => s.database!);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-8">
       <h2 className="text-xl font-semibold">Configure</h2>
 
       {/* Port conflicts warning */}

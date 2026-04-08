@@ -24,6 +24,20 @@ export interface LlmInterfaceOption {
   default?: boolean;
 }
 
+export interface ModelPreset {
+  id: string;
+  name: string;
+  description: string;
+  hfRepo: string;
+  modelName: string;
+  backend: "GGUF" | "VLLM";
+  chatFormat: string;
+  contextWindow: number;
+  interface: string;
+  vram: string;
+  hfFilename?: string;
+}
+
 export interface ServiceDefinition {
   id: string;
   name: string;
@@ -42,6 +56,8 @@ export interface ServiceDefinition {
   modelOptions?: ModelOption[];
   /** LLM interface/prompt provider options */
   llmInterfaceOptions?: LlmInterfaceOption[];
+  /** Pre-configured model presets with download info */
+  modelPresets?: ModelPreset[];
   /** Internal container port (if different from host-facing port) */
   containerPort?: number;
   /** Whether this service requires GPU access */
