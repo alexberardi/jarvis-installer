@@ -11,6 +11,11 @@ export interface WizardState {
   secrets: Record<string, string>;
   dbUser: string;
   whisperModel: string;
+  llmInterface: string;
+
+  // Deployment mode
+  deploymentTarget: "standard" | "compose-export";
+  storagePath: string;
 }
 
 export type WizardAction =
@@ -24,4 +29,7 @@ export type WizardAction =
   | { type: "SET_SECRET"; name: string; value: string }
   | { type: "REGENERATE_SECRETS"; secrets: Record<string, string> }
   | { type: "SET_DB_USER"; user: string }
-  | { type: "SET_WHISPER_MODEL"; model: string };
+  | { type: "SET_WHISPER_MODEL"; model: string }
+  | { type: "SET_LLM_INTERFACE"; interfaceId: string }
+  | { type: "SET_DEPLOYMENT_TARGET"; target: "standard" | "compose-export" }
+  | { type: "SET_STORAGE_PATH"; path: string };

@@ -38,6 +38,35 @@ export default function ModulesStep() {
         Choose which Jarvis services to include in your deployment.
       </p>
 
+      {/* Deployment method toggle */}
+      <div className="mb-6 p-4 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Deployment Method</p>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              {state.deploymentTarget === "standard"
+                ? "Download a zip with docker-compose.yml + .env"
+                : "Generate a single self-contained docker-compose.yml"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              dispatch({
+                type: "SET_DEPLOYMENT_TARGET",
+                target: state.deploymentTarget === "standard" ? "compose-export" : "standard",
+              })
+            }
+            className="text-sm text-blue-500 hover:text-blue-600"
+            data-testid="toggle-deployment-target"
+          >
+            {state.deploymentTarget === "standard"
+              ? "Want a single compose file instead?"
+              : "Switch to standard (zip)"}
+          </button>
+        </div>
+      </div>
+
       {/* Core services (always on) */}
       <div data-testid="core-services">
         <h3 className="mb-3 text-sm font-medium text-[var(--color-text-secondary)]">

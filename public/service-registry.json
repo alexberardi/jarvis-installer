@@ -63,6 +63,11 @@
       "dependsOn": ["postgres", "jarvis-auth", "jarvis-config-service"],
       "database": "jarvis_command_center",
       "dbDriverPrefix": "postgresql://",
+      "llmInterfaceOptions": [
+        { "id": "JarvisToolModel", "name": "Llama Tool Model", "description": "Full tool descriptions with all examples (default)", "default": true },
+        { "id": "LlamaSmallUntrained", "name": "Llama Small (1B-3B)", "description": "Optimized for small Llama models without adapters" },
+        { "id": "HermesMediumUntrained", "name": "Hermes 8B Instruct", "description": "Hermes 3 with native function calling" }
+      ],
       "envVars": [
         { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
         { "name": "ADMIN_API_KEY", "description": "Admin endpoint protection", "required": true, "secret": true, "secretRef": "ADMIN_API_KEY" },
@@ -118,6 +123,58 @@
       ]
     },
     {
+      "id": "jarvis-llm-proxy-api",
+      "name": "LLM Proxy",
+      "description": "LLM inference backend (GGUF/vLLM)",
+      "category": "recommended",
+      "port": 7704,
+      "containerPort": 7704,
+      "image": "ghcr.io/alexberardi/jarvis-llm-proxy-api:latest",
+      "healthCheck": "/health",
+      "dependsOn": ["postgres", "redis", "jarvis-auth", "jarvis-config-service"],
+      "database": "jarvis_llm_proxy",
+      "dbDriverPrefix": "postgresql+psycopg2://",
+      "gpu": true,
+      "envVars": [
+        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
+        { "name": "MIGRATIONS_DATABASE_URL", "description": "PostgreSQL URL for Alembic", "required": true },
+        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:8013" }
+      ]
+    },
+    {
+      "id": "jarvis-notifications",
+      "name": "Notifications",
+      "description": "Push notifications, inbox, and device token management",
+      "category": "recommended",
+      "port": 7712,
+      "containerPort": 7712,
+      "image": "ghcr.io/alexberardi/jarvis-notifications:latest",
+      "healthCheck": "/health",
+      "dependsOn": ["postgres", "jarvis-auth", "jarvis-config-service"],
+      "database": "jarvis_notifications",
+      "dbDriverPrefix": "postgresql+psycopg2://",
+      "envVars": [
+        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
+        { "name": "NOTIFICATIONS_PORT", "description": "Server port", "required": false, "default": "7712" },
+        { "name": "AUTH_SECRET_KEY", "description": "JWT signing key", "required": true, "secret": true, "secretRef": "AUTH_SECRET_KEY" },
+        { "name": "ADMIN_API_KEY", "description": "Admin endpoint protection", "required": true, "secret": true, "secretRef": "ADMIN_API_KEY" },
+        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:8013" }
+      ]
+    },
+    {
+      "id": "jarvis-settings-server",
+      "name": "Settings Server",
+      "description": "Runtime settings aggregator",
+      "category": "recommended",
+      "port": 7708,
+      "image": "ghcr.io/alexberardi/jarvis-settings-server:latest",
+      "healthCheck": "/health",
+      "dependsOn": ["jarvis-auth", "jarvis-config-service"],
+      "envVars": [
+        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:8013" }
+      ]
+    },
+    {
       "id": "jarvis-ocr-service",
       "name": "OCR Service",
       "description": "Optical character recognition with pluggable backends",
@@ -143,6 +200,32 @@
       "dbDriverPrefix": "postgresql+psycopg2://",
       "envVars": [
         { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
+        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:8013" }
+      ]
+    },
+    {
+      "id": "jarvis-web",
+      "name": "Web Chat",
+      "description": "Web chat interface",
+      "category": "optional",
+      "port": 7722,
+      "image": "ghcr.io/alexberardi/jarvis-web:latest",
+      "healthCheck": "/",
+      "dependsOn": ["jarvis-auth", "jarvis-command-center"],
+      "envVars": [
+        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:8013" }
+      ]
+    },
+    {
+      "id": "jarvis-admin",
+      "name": "Admin Dashboard",
+      "description": "Web admin dashboard for managing services and settings",
+      "category": "optional",
+      "port": 7711,
+      "image": "ghcr.io/alexberardi/jarvis-admin:latest",
+      "healthCheck": "/health",
+      "dependsOn": ["jarvis-auth", "jarvis-config-service"],
+      "envVars": [
         { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:8013" }
       ]
     }
@@ -191,6 +274,15 @@
         { "name": "GF_SECURITY_ADMIN_PASSWORD", "description": "Grafana admin password", "required": true, "default": "jarvis" }
       ],
       "volumes": ["jarvis-grafana-data:/var/lib/grafana"]
+    },
+    {
+      "id": "mosquitto",
+      "name": "Mosquitto",
+      "description": "MQTT message broker for node communication",
+      "image": "eclipse-mosquitto:2",
+      "port": 1884,
+      "envVars": [],
+      "volumes": ["jarvis-mosquitto-data:/mosquitto/data"]
     }
   ]
 }

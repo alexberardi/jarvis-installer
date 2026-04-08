@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
 export default defineConfig({
+  // For GitHub Pages subdirectory deployment. Change to "/" for custom domain root.
   base: "/jarvis-installer/",
   plugins: [react(), tailwindcss()],
   resolve: {

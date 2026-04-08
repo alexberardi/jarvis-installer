@@ -24,7 +24,7 @@ export function getAllEnabledServices(
  * Returns all required infrastructure for the enabled services,
  * plus grafana (if loki is present) and redis (always).
  */
-function getInfraForServices(
+export function getInfraForServices(
   enabledIds: string[],
   registry: ServiceRegistry,
 ): InfrastructureDefinition[] {
@@ -192,6 +192,11 @@ function generateServiceBlock(
   const nonDefaultWhisper = isWhisper && state.whisperModel !== "base.en";
   if (nonDefaultWhisper) {
     lines.push(`      WHISPER_MODEL: /models/ggml-${state.whisperModel}.bin`);
+  }
+
+  // LLM interface seed for command-center
+  if (service.id === "jarvis-command-center" && state.llmInterface) {
+    lines.push(`      LLM_INTERFACE_SEED: ${state.llmInterface}`);
   }
 
   // Dependencies

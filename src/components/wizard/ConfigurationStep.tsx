@@ -3,7 +3,7 @@ import { useWizard } from "@/context/WizardContext";
 import { parseRegistry, getCoreServices, getRecommendedServices, getOptionalServices, getRequiredInfrastructure } from "@/lib/service-registry";
 import { generateAllSecrets } from "@/lib/secret-generator";
 import { detectPortConflicts, buildPortEntries, serviceIdToPortVar } from "@/lib/port-utils";
-import type { ServiceRegistry, ModelOption } from "@/types/service-registry";
+import type { ServiceRegistry, ModelOption, LlmInterfaceOption } from "@/types/service-registry";
 
 export default function ConfigurationStep() {
   const { state, dispatch } = useWizard();
@@ -56,6 +56,10 @@ export default function ConfigurationStep() {
   // Whisper model options
   const whisperService = allEnabled.find((s) => s.id === "jarvis-whisper-api");
   const modelOptions: ModelOption[] = whisperService?.modelOptions ?? [];
+
+  // LLM interface options
+  const commandCenter = allEnabled.find((s) => s.id === "jarvis-command-center");
+  const llmInterfaceOptions: LlmInterfaceOption[] = commandCenter?.llmInterfaceOptions ?? [];
 
   // Databases that will be created
   const databases = allEnabled.filter((s) => s.database).map((s) => s.database!);
@@ -139,6 +143,33 @@ export default function ConfigurationStep() {
               This model is not included in the pre-built image. You will need to download it before starting.
               Instructions will be shown on the next step.
             </div>
+          )}
+        </section>
+      )}
+
+      {/* LLM Interface */}
+      {commandCenter && llmInterfaceOptions.length > 0 && (
+        <section>
+          <h3 className="mb-3 text-sm font-medium">LLM Interface</h3>
+          <p className="mb-3 text-xs text-[var(--color-text-secondary)]">
+            Prompt provider for voice command processing. Match this to your LLM model.
+          </p>
+          <select
+            value={state.llmInterface}
+            onChange={(e) => dispatch({ type: "SET_LLM_INTERFACE", interfaceId: e.target.value })}
+            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-3 py-2 text-sm"
+            data-testid="llm-interface-select"
+          >
+            {llmInterfaceOptions.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.name}{opt.default ? " (default)" : ""}
+              </option>
+            ))}
+          </select>
+          {llmInterfaceOptions.find((o) => o.id === state.llmInterface)?.description && (
+            <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
+              {llmInterfaceOptions.find((o) => o.id === state.llmInterface)?.description}
+            </p>
           )}
         </section>
       )}

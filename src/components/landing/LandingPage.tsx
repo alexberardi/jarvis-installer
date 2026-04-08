@@ -33,19 +33,24 @@ export default function LandingPage() {
         <p className="text-xl text-[var(--color-text-secondary)]">
           Your personal voice assistant. Private, self-hosted, and open source.
         </p>
-        <div className="mt-8 flex justify-center gap-4">
-          <Link
-            to="/configurator"
-            className="rounded-lg bg-[var(--color-accent)] px-8 py-3 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)]"
-          >
-            Get Started
-          </Link>
-          <a
-            href="https://github.com/alexberardi/jarvis"
-            className="rounded-lg border border-[var(--color-border)] px-8 py-3 text-sm font-medium hover:bg-[var(--color-bg-tertiary)]"
-          >
-            GitHub
-          </a>
+        <div className="mt-8 flex flex-col items-center gap-4">
+          <div className="flex gap-4">
+            <Link
+              to="/configurator"
+              className="rounded-lg bg-[var(--color-accent)] px-8 py-3 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)]"
+            >
+              Get Started
+            </Link>
+            <a
+              href="https://github.com/alexberardi/jarvis"
+              className="rounded-lg border border-[var(--color-border)] px-8 py-3 text-sm font-medium hover:bg-[var(--color-bg-tertiary)]"
+            >
+              GitHub
+            </a>
+          </div>
+          <p className="text-sm text-[var(--color-text-secondary)]">
+            Works with TrueNAS, Portainer, Synology, Unraid, or any Docker environment
+          </p>
         </div>
       </header>
 

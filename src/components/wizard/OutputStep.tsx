@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useWizard } from "@/context/WizardContext";
 import { parseRegistry } from "@/lib/service-registry";
 import { generateCompose } from "@/lib/compose-generator";
+import { generateComposeExport } from "@/lib/compose-export-generator";
 import { generateEnv } from "@/lib/env-generator";
 import { generateZipBundle } from "@/lib/zip-bundle";
 import type { ServiceRegistry } from "@/types/service-registry";
@@ -9,10 +10,12 @@ import type { ServiceRegistry } from "@/types/service-registry";
 type PreviewTab = "compose" | "env";
 
 export default function OutputStep() {
-  const { state } = useWizard();
+  const { state, dispatch } = useWizard();
   const [registry, setRegistry] = useState<ServiceRegistry | null>(null);
   const [activeTab, setActiveTab] = useState<PreviewTab>("compose");
   const [copied, setCopied] = useState(false);
+
+  const isExportMode = state.deploymentTarget === "compose-export";
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}service-registry.json`)
@@ -25,12 +28,21 @@ export default function OutputStep() {
     [state, registry],
   );
 
+  const exportContent = useMemo(
+    () => (registry ? generateComposeExport(state, registry, state.storagePath) : ""),
+    [state, registry],
+  );
+
   const envContent = useMemo(
     () => (registry ? generateEnv(state, registry) : ""),
     [state, registry],
   );
 
-  const activeContent = activeTab === "compose" ? composeContent : envContent;
+  const activeContent = isExportMode
+    ? exportContent
+    : activeTab === "compose"
+      ? composeContent
+      : envContent;
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(activeContent);
@@ -38,7 +50,7 @@ export default function OutputStep() {
     setTimeout(() => setCopied(false), 2000);
   }, [activeContent]);
 
-  const handleDownload = useCallback(async () => {
+  const handleDownloadZip = useCallback(async () => {
     if (!registry) return;
     const blob = await generateZipBundle(state, registry);
     const url = URL.createObjectURL(blob);
@@ -49,37 +61,119 @@ export default function OutputStep() {
     URL.revokeObjectURL(url);
   }, [state, registry]);
 
+  const handleDownloadYaml = useCallback(() => {
+    const blob = new Blob([exportContent], { type: "text/yaml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "docker-compose.yml";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [exportContent]);
+
   if (!registry) {
     return <div>Loading...</div>;
   }
 
   const showWhisperWarning = state.whisperModel !== "base.en" && state.enabledModules.includes("jarvis-whisper-api");
 
+  if (isExportMode) {
+    return (
+      <div className="space-y-6">
+        <h2 className="text-xl font-semibold">Install Jarvis</h2>
+
+        {/* Whisper model warning */}
+        {showWhisperWarning && (
+          <WhisperWarning whisperModel={state.whisperModel} />
+        )}
+
+        {/* Storage path */}
+        <div>
+          <label htmlFor="storage-path" className="block text-sm font-medium">
+            Storage Path
+          </label>
+          <p className="mb-2 text-xs text-[var(--color-text-secondary)]">
+            Where persistent data (databases, logs) will be stored on the host.
+          </p>
+          <input
+            id="storage-path"
+            type="text"
+            value={state.storagePath}
+            onChange={(e) => dispatch({ type: "SET_STORAGE_PATH", path: e.target.value })}
+            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-3 py-2 text-sm font-mono"
+            data-testid="storage-path-input"
+          />
+        </div>
+
+        {/* Preview */}
+        <div className="relative">
+          <div className="mb-2 text-sm font-medium">docker-compose.yml</div>
+          <pre
+            data-testid="preview-compose-export"
+            className="max-h-96 overflow-auto rounded-lg bg-[var(--color-bg-secondary)] p-4 text-xs"
+          >
+            <code>{exportContent}</code>
+          </pre>
+          <button
+            type="button"
+            onClick={handleCopy}
+            aria-label="Copy"
+            className="absolute right-2 top-8 rounded-md bg-[var(--color-bg-tertiary)] px-3 py-1 text-xs hover:bg-[var(--color-border)]"
+          >
+            {copied ? "Copied!" : "Copy"}
+          </button>
+        </div>
+
+        {/* Download */}
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={handleDownloadYaml}
+            aria-label="Download"
+            className="rounded-lg bg-[var(--color-accent)] px-6 py-2 text-sm text-white hover:bg-[var(--color-accent-hover)]"
+            data-testid="download-yaml"
+          >
+            Download docker-compose.yml
+          </button>
+        </div>
+
+        {/* Instructions */}
+        <div className="space-y-3">
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-4">
+            <h3 className="mb-2 text-sm font-medium">For NAS / Docker UI</h3>
+            <ol className="list-inside list-decimal space-y-1 text-xs text-[var(--color-text-secondary)]">
+              <li>Copy the YAML above</li>
+              <li>Paste into your Docker UI (TrueNAS, Portainer, Synology, Unraid, etc.)</li>
+              <li>Deploy the stack</li>
+            </ol>
+          </div>
+
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-4">
+            <h3 className="mb-2 text-sm font-medium">For CLI</h3>
+            <ol className="list-inside list-decimal space-y-1 text-xs text-[var(--color-text-secondary)]">
+              <li>Save as <code className="rounded bg-[var(--color-bg-tertiary)] px-1">docker-compose.yml</code></li>
+              <li>Run <code className="rounded bg-[var(--color-bg-tertiary)] px-1">docker compose up -d</code></li>
+              <li>Wait ~30 seconds for services to start</li>
+            </ol>
+          </div>
+
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-xs text-blue-800">
+            After services start, open <code className="rounded bg-blue-100 px-1">http://your-server:7711</code> to
+            access the admin dashboard and create your account.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Standard mode
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-semibold">Install Jarvis</h2>
 
       {/* Whisper model warning */}
       {showWhisperWarning && (
-        <div
-          className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800"
-          data-testid="whisper-download-warning"
-        >
-          <p className="mb-2 font-medium">
-            Whisper model &quot;{state.whisperModel}&quot; requires manual download
-          </p>
-          <ol className="list-inside list-decimal space-y-1 text-xs">
-            <li>Create a <code className="rounded bg-amber-100 px-1">models/</code> directory next to your docker-compose.yml</li>
-            <li>
-              Download the model:
-              <pre className="mt-1 overflow-x-auto rounded bg-amber-100 p-2">
-                {`docker run --rm -v ./models:/out ghcr.io/alexberardi/jarvis-whisper-api:latest \\
-  bash -c "cd /root/whisper.cpp && bash models/download-ggml-model.sh ${state.whisperModel} && cp models/ggml-${state.whisperModel}.bin /out/"`}
-              </pre>
-            </li>
-            <li>The generated docker-compose.yml already includes the volume mount and env var.</li>
-          </ol>
-        </div>
+        <WhisperWarning whisperModel={state.whisperModel} />
       )}
 
       {/* File preview tabs */}
@@ -132,7 +226,7 @@ export default function OutputStep() {
       <div className="space-y-3">
         <button
           type="button"
-          onClick={handleDownload}
+          onClick={handleDownloadZip}
           aria-label="Download"
           className="rounded-lg bg-[var(--color-accent)] px-6 py-2 text-sm text-white hover:bg-[var(--color-accent-hover)]"
           data-testid="download-zip"
@@ -154,6 +248,30 @@ export default function OutputStep() {
           <li>Wait for services to start (~30 seconds)</li>
         </ol>
       </div>
+    </div>
+  );
+}
+
+function WhisperWarning({ whisperModel }: { whisperModel: string }) {
+  return (
+    <div
+      className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800"
+      data-testid="whisper-download-warning"
+    >
+      <p className="mb-2 font-medium">
+        Whisper model &quot;{whisperModel}&quot; requires manual download
+      </p>
+      <ol className="list-inside list-decimal space-y-1 text-xs">
+        <li>Create a <code className="rounded bg-amber-100 px-1">models/</code> directory next to your docker-compose.yml</li>
+        <li>
+          Download the model:
+          <pre className="mt-1 overflow-x-auto rounded bg-amber-100 p-2">
+            {`docker run --rm -v ./models:/out ghcr.io/alexberardi/jarvis-whisper-api:latest \\
+  bash -c "cd /root/whisper.cpp && bash models/download-ggml-model.sh ${whisperModel} && cp models/ggml-${whisperModel}.bin /out/"`}
+          </pre>
+        </li>
+        <li>The generated docker-compose.yml already includes the volume mount and env var.</li>
+      </ol>
     </div>
   );
 }

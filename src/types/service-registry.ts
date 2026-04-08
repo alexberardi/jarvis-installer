@@ -17,6 +17,13 @@ export interface ModelOption {
   builtin?: boolean;
 }
 
+export interface LlmInterfaceOption {
+  id: string;
+  name: string;
+  description: string;
+  default?: boolean;
+}
+
 export interface ServiceDefinition {
   id: string;
   name: string;
@@ -33,6 +40,12 @@ export interface ServiceDefinition {
   dbDriverPrefix?: string;
   /** Selectable model options (e.g., whisper model sizes) */
   modelOptions?: ModelOption[];
+  /** LLM interface/prompt provider options */
+  llmInterfaceOptions?: LlmInterfaceOption[];
+  /** Internal container port (if different from host-facing port) */
+  containerPort?: number;
+  /** Whether this service requires GPU access */
+  gpu?: boolean;
 }
 
 export interface InfrastructureDefinition {

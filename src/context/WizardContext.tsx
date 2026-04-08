@@ -12,6 +12,9 @@ const initialState: WizardState = {
   secrets: {},
   dbUser: "jarvis",
   whisperModel: "base.en",
+  llmInterface: "JarvisToolModel",
+  deploymentTarget: "standard",
+  storagePath: "/var/lib/jarvis",
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -61,6 +64,12 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
       return { ...state, dbUser: action.user };
     case "SET_WHISPER_MODEL":
       return { ...state, whisperModel: action.model };
+    case "SET_LLM_INTERFACE":
+      return { ...state, llmInterface: action.interfaceId };
+    case "SET_DEPLOYMENT_TARGET":
+      return { ...state, deploymentTarget: action.target };
+    case "SET_STORAGE_PATH":
+      return { ...state, storagePath: action.path };
     default:
       return state;
   }
