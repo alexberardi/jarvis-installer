@@ -446,12 +446,15 @@ function generateAuthSeedScript(
   appKeys: Map<string, AppKeyEntry>,
   authContainerPort: number,
 ): string {
-  // Use double quotes for Python strings since the outer python -c uses single quotes
-  // (single quotes prevent shell from expanding $ in bcrypt hashes like $2b$12$...)
+  // Escape $ as $$ for Docker Compose (it interpolates $ in ALL string values
+  // including block scalars). Then single quotes around python -c prevent shell
+  // from expanding what's left.
   const clientLines: string[] = [];
   for (const [, entry] of appKeys) {
+    // Double every $ so Docker Compose passes them through literally
+    const escapedHash = entry.bcryptHash.replace(/\$/g, "$$$$");
     clientLines.push(
-      `    ("${entry.appId}", "${entry.bcryptHash}"),`,
+      `    ("${entry.appId}", "${escapedHash}"),`,
     );
   }
 
