@@ -320,12 +320,6 @@ function generateExportServiceBlock(
 
   if (service.id === "jarvis-admin") {
     lines.push('      JARVIS_DEPLOY_MODE: "compose-export"');
-    // Admin uses different env var names for service discovery
-    lines.push(`      CONFIG_SERVICE_URL: "http://jarvis-config-service:7700"`);
-    const adminAuthService = allEnabled.find((s) => s.id === "jarvis-auth");
-    if (adminAuthService) {
-      lines.push(`      AUTH_URL: "http://jarvis-auth:${getContainerPort(adminAuthService)}"`);
-    }
   }
 
   // Whisper model override
