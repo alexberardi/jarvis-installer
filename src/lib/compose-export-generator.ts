@@ -446,17 +446,17 @@ function generateAuthSeedScript(
   appKeys: Map<string, AppKeyEntry>,
   authContainerPort: number,
 ): string {
+  // Use double quotes for Python strings since the outer python -c uses single quotes
+  // (single quotes prevent shell from expanding $ in bcrypt hashes like $2b$12$...)
   const clientLines: string[] = [];
   for (const [, entry] of appKeys) {
-    // Escape single quotes in bcrypt hash for Python string
-    const escapedBcrypt = entry.bcryptHash.replace(/'/g, "\\'");
     clientLines.push(
-      `    ('${entry.appId}', '${escapedBcrypt}'),`,
+      `    ("${entry.appId}", "${entry.bcryptHash}"),`,
     );
   }
 
   return `python -m alembic upgrade head
-python -c "
+python -c '
 from jarvis_auth.app.db.session import SessionLocal
 from jarvis_auth.app.db import models
 from datetime import datetime, timezone
@@ -467,11 +467,11 @@ ${clientLines.join("\n")}
 for app_id, key_hash in clients:
     if not db.query(models.AppClient).filter(models.AppClient.app_id == app_id).first():
         db.add(models.AppClient(app_id=app_id, name=app_id, key_hash=key_hash, is_active=True, created_at=datetime.now(timezone.utc)))
-        print(f'Seeded app client: {app_id}')
+        print(f"Seeded app client: {app_id}")
 db.commit()
 db.close()
-print('Auth seed complete')
-"
+print("Auth seed complete")
+'
 exec uvicorn jarvis_auth.app.main:app --host 0.0.0.0 --port ${authContainerPort}`;
 }
 
@@ -479,16 +479,18 @@ function generateConfigSeedScript(
   allEnabled: ServiceDefinition[],
   configContainerPort: number,
 ): string {
+  // Use double quotes for Python strings since outer python -c uses single quotes
   const serviceLines: string[] = [];
   for (const svc of allEnabled) {
     const cPort = getContainerPort(svc);
+    const desc = svc.description.replace(/"/g, '\\"');
     serviceLines.push(
-      `    ('${svc.id}', '${svc.id}', ${cPort}, 'http', '${svc.healthCheck}', '${svc.description.replace(/'/g, "\\'")}'),`,
+      `    ("${svc.id}", "${svc.id}", ${cPort}, "http", "${svc.healthCheck}", "${desc}"),`,
     );
   }
 
   return `python -m alembic upgrade head
-python -c "
+python -c '
 from app.database import SessionLocal
 from app.models import Service
 db = SessionLocal()
@@ -498,10 +500,10 @@ ${serviceLines.join("\n")}
 for name, host, port, scheme, health, desc in services:
     if not db.query(Service).filter(Service.name == name).first():
         db.add(Service(name=name, host=host, port=port, scheme=scheme, health_path=health, description=desc))
-        print(f'Registered service: {name}')
+        print(f"Registered service: {name}")
 db.commit()
 db.close()
-print('Config seed complete')
-"
+print("Config seed complete")
+'
 exec uvicorn app.main:app --host 0.0.0.0 --port ${configContainerPort}`;
 }
