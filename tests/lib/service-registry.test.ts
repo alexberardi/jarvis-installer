@@ -99,25 +99,17 @@ describe("service-registry", () => {
     it("returns only services with category 'optional'", () => {
       const registry = parseRegistry(registryJson);
       const optional = getOptionalServices(registry);
-      expect(optional.length).toBeGreaterThan(0);
+      // No optional services in the current registry (mcp, ocr, recipes removed)
       expect(optional.every((s) => s.category === "optional")).toBe(true);
     });
 
-    it("includes mcp, ocr, recipes", () => {
-      const registry = parseRegistry(registryJson);
-      const optional = getOptionalServices(registry);
-      const ids = optional.map((s) => s.id);
-      expect(ids).toContain("jarvis-mcp");
-      expect(ids).toContain("jarvis-ocr-service");
-      expect(ids).toContain("jarvis-recipes-server");
-    });
-
-    it("does not include recommended services", () => {
+    it("does not include recommended or core services", () => {
       const registry = parseRegistry(registryJson);
       const optional = getOptionalServices(registry);
       const ids = optional.map((s) => s.id);
       expect(ids).not.toContain("jarvis-whisper-api");
       expect(ids).not.toContain("jarvis-tts");
+      expect(ids).not.toContain("jarvis-config-service");
     });
   });
 
@@ -127,7 +119,6 @@ describe("service-registry", () => {
       const grouped = getServicesByCategory(registry);
       expect(grouped.core.length).toBeGreaterThan(0);
       expect(grouped.recommended.length).toBeGreaterThan(0);
-      expect(grouped.optional.length).toBeGreaterThan(0);
       expect(grouped.core.length + grouped.recommended.length + grouped.optional.length).toBe(
         registry.services.length,
       );

@@ -21,26 +21,24 @@ function renderModulesStep() {
 }
 
 describe("ModulesStep", () => {
-  it("renders core services as always-on", async () => {
+  it("renders core services with toggles", async () => {
     renderModulesStep();
     const coreSection = await screen.findByTestId("core-services");
     expect(coreSection).toBeInTheDocument();
     expect(within(coreSection).getByText(/auth service/i)).toBeInTheDocument();
     expect(within(coreSection).getByText(/command center/i)).toBeInTheDocument();
+    expect(within(coreSection).getByText(/llm proxy/i)).toBeInTheDocument();
   });
 
-  it("renders optional modules with toggles", async () => {
+  it("renders recommended services with toggles", async () => {
     renderModulesStep();
-    const optionalSection = await screen.findByTestId("optional-services");
-    expect(optionalSection).toBeInTheDocument();
-    expect(within(optionalSection).getByText(/ocr service/i)).toBeInTheDocument();
-    expect(within(optionalSection).getByText(/recipes service/i)).toBeInTheDocument();
-  });
-
-  it("shows module descriptions", async () => {
-    renderModulesStep();
-    await screen.findByTestId("optional-services");
-    expect(screen.getByText(/optical character recognition/i)).toBeInTheDocument();
+    const recommendedSection = await screen.findByTestId("recommended-services");
+    expect(recommendedSection).toBeInTheDocument();
+    // Check toggles exist for recommended services
+    expect(within(recommendedSection).getByTestId("toggle-jarvis-whisper-api")).toBeInTheDocument();
+    expect(within(recommendedSection).getByTestId("toggle-jarvis-tts")).toBeInTheDocument();
+    expect(within(recommendedSection).getByTestId("toggle-jarvis-web")).toBeInTheDocument();
+    expect(within(recommendedSection).getByTestId("toggle-jarvis-admin")).toBeInTheDocument();
   });
 
   it("shows port numbers next to service names", async () => {
@@ -50,11 +48,23 @@ describe("ModulesStep", () => {
     expect(screen.getByText(":7701")).toBeInTheDocument();
   });
 
-  it("toggles an optional module on", async () => {
+  it("auto-enables all core and recommended services on load", async () => {
+    renderModulesStep();
+    await screen.findByTestId("core-services");
+    // All toggles should be checked (aria-checked="true")
+    const authToggle = screen.getByTestId("toggle-jarvis-auth");
+    expect(authToggle).toHaveAttribute("aria-checked", "true");
+    const whisperToggle = screen.getByTestId("toggle-jarvis-whisper-api");
+    expect(whisperToggle).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("toggles a recommended module off", async () => {
     renderModulesStep();
     const user = userEvent.setup();
-    const toggle = await screen.findByTestId("toggle-jarvis-ocr-service");
-    await user.click(toggle);
+    const toggle = await screen.findByTestId("toggle-jarvis-tts");
+    // Should start enabled
     expect(toggle).toHaveAttribute("aria-checked", "true");
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-checked", "false");
   });
 });

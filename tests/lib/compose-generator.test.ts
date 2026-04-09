@@ -21,19 +21,19 @@ describe("compose-generator", () => {
     expect(output).toContain("jarvis-logs:");
   });
 
-  it("includes optional services when enabled", () => {
+  it("includes recommended services when enabled", () => {
     const output = generateCompose(
-      makeState({ enabledModules: ["jarvis-recipes-server", "jarvis-ocr-service"] }),
+      makeState({ enabledModules: ["jarvis-whisper-api", "jarvis-tts"] }),
       registry,
     );
-    expect(output).toContain("jarvis-recipes-server:");
-    expect(output).toContain("jarvis-ocr-service:");
+    expect(output).toContain("jarvis-whisper-api:");
+    expect(output).toContain("jarvis-tts:");
   });
 
-  it("excludes optional services when not enabled", () => {
+  it("excludes recommended services when not enabled", () => {
     const output = generateCompose(makeState({ enabledModules: [] }), registry);
-    expect(output).not.toContain("jarvis-recipes-server:");
-    expect(output).not.toContain("jarvis-ocr-service:");
+    expect(output).not.toContain("jarvis-whisper-api:");
+    expect(output).not.toContain("jarvis-tts:");
   });
 
   it("includes postgres infrastructure", () => {

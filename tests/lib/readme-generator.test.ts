@@ -25,13 +25,13 @@ describe("readme-generator", () => {
     expect(readme).toContain("Command Center");
   });
 
-  it("includes optional services when enabled", () => {
+  it("includes recommended services when enabled", () => {
     const readme = generateReadme(
-      makeState({ enabledModules: ["jarvis-recipes-server"] }),
+      makeState({ enabledModules: ["jarvis-whisper-api"] }),
       registry,
     );
-    expect(readme).toContain("### Optional");
-    expect(readme).toContain("Recipes Service");
+    expect(readme).toContain("### Recommended");
+    expect(readme).toContain("Whisper STT");
   });
 
   it("includes health check commands", () => {

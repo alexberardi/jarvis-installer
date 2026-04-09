@@ -1,17 +1,28 @@
 import { useEffect, useState } from "react";
 import { useWizard } from "@/context/WizardContext";
-import { parseRegistry, getCoreServices, getRecommendedServices, getOptionalServices } from "@/lib/service-registry";
+import { parseRegistry, getCoreServices, getRecommendedServices } from "@/lib/service-registry";
 import { resolveModuleToggle } from "@/lib/dependency-resolver";
 import type { ServiceRegistry, ServiceDefinition } from "@/types/service-registry";
 
 export default function ModulesStep() {
   const { state, dispatch } = useWizard();
   const [registry, setRegistry] = useState<ServiceRegistry | null>(null);
+  const [disabledCore, setDisabledCore] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}service-registry.json`)
       .then((res) => res.json())
-      .then((json) => setRegistry(parseRegistry(json)));
+      .then((json) => {
+        const reg = parseRegistry(json);
+        setRegistry(reg);
+
+        // Auto-enable all core + recommended on first load
+        if (state.enabledModules.length === 0) {
+          const allCore = getCoreServices(reg).map((s) => s.id);
+          const allRecommended = getRecommendedServices(reg).map((s) => s.id);
+          dispatch({ type: "SET_ENABLED_MODULES", modules: [...allCore, ...allRecommended] });
+        }
+      });
   }, []);
 
   if (!registry) {
@@ -20,13 +31,21 @@ export default function ModulesStep() {
 
   const coreServices = getCoreServices(registry);
   const recommendedServices = getRecommendedServices(registry);
-  const optionalServices = getOptionalServices(registry);
-
-  const hasWhisper = state.enabledModules.includes("jarvis-whisper-api");
-  const hasTts = state.enabledModules.includes("jarvis-tts");
-  const missingRecommended = !hasWhisper || !hasTts;
 
   function handleToggle(serviceId: string, enabled: boolean) {
+    const isCoreService = coreServices.some((s) => s.id === serviceId);
+
+    if (isCoreService && !enabled) {
+      // Track disabled core services for warning
+      setDisabledCore((prev) => new Set([...prev, serviceId]));
+    } else if (isCoreService && enabled) {
+      setDisabledCore((prev) => {
+        const next = new Set(prev);
+        next.delete(serviceId);
+        return next;
+      });
+    }
+
     const result = resolveModuleToggle(registry!, state.enabledModules, serviceId, enabled);
     dispatch({ type: "SET_ENABLED_MODULES", modules: result.enabled });
   }
@@ -67,14 +86,28 @@ export default function ModulesStep() {
         </div>
       </div>
 
-      {/* Core services (always on) */}
+      {/* Core services warning */}
+      {disabledCore.size > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+          <strong>Warning:</strong> You have disabled core services ({[...disabledCore].join(", ")}).
+          These are required for Jarvis to function and will need to be hosted elsewhere.
+        </div>
+      )}
+
+      {/* Core services */}
       <div data-testid="core-services">
         <h3 className="mb-3 text-sm font-medium text-[var(--color-text-secondary)]">
-          Core Services (always included)
+          Core Services
         </h3>
         <div className="space-y-2">
           {coreServices.map((service) => (
-            <ServiceCard key={service.id} service={service} alwaysOn />
+            <ServiceCard
+              key={service.id}
+              service={service}
+              enabled={state.enabledModules.includes(service.id)}
+              onToggle={(enabled) => handleToggle(service.id, enabled)}
+              isCore
+            />
           ))}
         </div>
       </div>
@@ -95,51 +128,22 @@ export default function ModulesStep() {
               />
             ))}
           </div>
-          {missingRecommended && (
-            <div
-              className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800"
-              data-testid="recommended-warning"
-            >
-              {!hasWhisper && !hasTts
-                ? "Without Whisper STT and Text-to-Speech, you will need to configure your own speech-to-text and text-to-speech services for voice interaction."
-                : !hasWhisper
-                  ? "Without Whisper STT, you will need to configure your own speech-to-text service for voice input."
-                  : "Without Text-to-Speech, you will need to configure your own TTS service for voice responses."}
-            </div>
-          )}
         </div>
       )}
-
-      {/* Optional services */}
-      <div data-testid="optional-services">
-        <h3 className="mb-3 text-sm font-medium text-[var(--color-text-secondary)]">
-          Optional Services
-        </h3>
-        <div className="space-y-2">
-          {optionalServices.map((service) => (
-            <ServiceCard
-              key={service.id}
-              service={service}
-              enabled={state.enabledModules.includes(service.id)}
-              onToggle={(enabled) => handleToggle(service.id, enabled)}
-            />
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
 
 function ServiceCard({
   service,
-  alwaysOn,
   enabled,
   onToggle,
+  isCore,
 }: {
   service: ServiceDefinition;
-  alwaysOn?: boolean;
   enabled?: boolean;
   onToggle?: (enabled: boolean) => void;
+  isCore?: boolean;
 }) {
   return (
     <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-3">
@@ -148,28 +152,29 @@ function ServiceCard({
         <span className="ml-2 text-xs text-[var(--color-text-secondary)]">
           :{service.port}
         </span>
+        {isCore && (
+          <span className="ml-2 text-xs text-[var(--color-text-secondary)] opacity-60">
+            (core)
+          </span>
+        )}
         <p className="text-xs text-[var(--color-text-secondary)]">{service.description}</p>
       </div>
-      {alwaysOn ? (
-        <span className="text-xs text-[var(--color-success)]">Always on</span>
-      ) : (
-        <button
-          type="button"
-          role="switch"
-          aria-checked={enabled}
-          data-testid={`toggle-${service.id}`}
-          onClick={() => onToggle?.(!enabled)}
-          className={`relative h-6 w-11 rounded-full transition-colors ${
-            enabled ? "bg-[var(--color-accent)]" : "bg-[var(--color-bg-tertiary)]"
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        data-testid={`toggle-${service.id}`}
+        onClick={() => onToggle?.(!enabled)}
+        className={`relative h-6 w-11 rounded-full transition-colors ${
+          enabled ? "bg-[var(--color-accent)]" : "bg-[var(--color-bg-tertiary)]"
+        }`}
+      >
+        <span
+          className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+            enabled ? "translate-x-5" : "translate-x-0"
           }`}
-        >
-          <span
-            className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-              enabled ? "translate-x-5" : "translate-x-0"
-            }`}
-          />
-        </button>
-      )}
+        />
+      </button>
     </div>
   );
 }
