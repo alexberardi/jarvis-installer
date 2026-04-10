@@ -1,5 +1,12 @@
 import { Link } from "react-router";
 
+const DOWNLOADS = [
+  { label: "Windows x64", artifact: "jarvis-admin-windows-x64.exe" },
+  { label: "macOS (Apple Silicon)", artifact: "jarvis-admin-darwin-arm64" },
+  { label: "Linux x64", artifact: "jarvis-admin-linux-x64" },
+  { label: "Linux ARM64", artifact: "jarvis-admin-linux-arm64" },
+];
+
 const FEATURES = [
   {
     title: "Voice Controlled",
@@ -51,6 +58,24 @@ export default function LandingPage() {
           <p className="text-sm text-[var(--color-text-secondary)]">
             Works with TrueNAS, Portainer, Synology, Unraid, or any Docker environment
           </p>
+        </div>
+
+        {/* Direct download */}
+        <div className="mt-6">
+          <p className="mb-3 text-sm text-[var(--color-text-secondary)]">
+            Or download the installer directly:
+          </p>
+          <div className="flex flex-wrap justify-center gap-3">
+            {DOWNLOADS.map((dl) => (
+              <a
+                key={dl.artifact}
+                href={`https://github.com/alexberardi/jarvis-admin/releases/latest/download/${dl.artifact}`}
+                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-xs font-medium hover:bg-[var(--color-bg-tertiary)]"
+              >
+                {dl.label}
+              </a>
+            ))}
+          </div>
         </div>
       </header>
 
