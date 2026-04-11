@@ -20,9 +20,9 @@ describe("LandingPage", () => {
     expect(heading.textContent).toContain("Jarvis");
   });
 
-  it("has a CTA link to configurator", () => {
+  it("has a link to configurator", () => {
     renderLandingPage();
-    const cta = screen.getByRole("link", { name: /get started/i });
+    const cta = screen.getByRole("link", { name: /docker compose/i });
     expect(cta).toBeInTheDocument();
     expect(cta).toHaveAttribute("href", "/configurator");
   });
@@ -37,7 +37,6 @@ describe("LandingPage", () => {
 
   it("includes privacy messaging", () => {
     renderLandingPage();
-    // Footer explicitly mentions open source
-    expect(screen.getByText(/no cloud required/i)).toBeInTheDocument();
+    expect(screen.getByText(/open source software/i)).toBeInTheDocument();
   });
 });
