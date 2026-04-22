@@ -21,6 +21,7 @@ export function makeState(overrides: Partial<WizardState> = {}): WizardState {
     deploymentTarget: "standard",
     storagePath: "/var/lib/jarvis",
     gpuEnabled: false,
+    gpuType: "nvidia",
     ...overrides,
   };
 }
