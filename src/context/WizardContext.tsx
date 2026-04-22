@@ -16,6 +16,7 @@ const initialState: WizardState = {
   deploymentTarget: "standard",
   storagePath: "/var/lib/jarvis",
   gpuEnabled: true,
+  gpuType: "nvidia",
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -73,6 +74,8 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
       return { ...state, storagePath: action.path };
     case "SET_GPU_ENABLED":
       return { ...state, gpuEnabled: action.enabled };
+    case "SET_GPU_TYPE":
+      return { ...state, gpuType: action.gpuType };
     default:
       return state;
   }

@@ -174,24 +174,30 @@ export default function ConfigurationStep() {
         </section>
       )}
 
-      {/* GPU toggle — opt-out: checked = no GPU (safe default for NAS/VMs) */}
+      {/* GPU type selector */}
       {allEnabled.some((s) => s.gpu) && (
         <section>
           <h3 className="mb-3 text-sm font-medium">GPU Acceleration</h3>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={!state.gpuEnabled}
-              onChange={(e) => dispatch({ type: "SET_GPU_ENABLED", enabled: !e.target.checked })}
-              className="h-4 w-4 rounded border-[var(--color-border)]"
-            />
-            <div>
-              <span className="text-sm">No GPU (CPU-only inference)</span>
-              <p className="text-xs text-[var(--color-text-secondary)]">
-                Check if you don't have an NVIDIA GPU with the Container Toolkit installed.
-              </p>
-            </div>
-          </label>
+          <select
+            value={state.gpuType}
+            onChange={(e) => {
+              const gpuType = e.target.value as import("../../types/wizard").GpuType;
+              dispatch({ type: "SET_GPU_TYPE", gpuType });
+              dispatch({ type: "SET_GPU_ENABLED", enabled: gpuType !== "none" });
+            }}
+            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm"
+          >
+            <option value="nvidia">NVIDIA (CUDA)</option>
+            <option value="amd">AMD (Vulkan) — recommended for single GPU</option>
+            <option value="amd-rocm">AMD (ROCm) — better for multi-GPU</option>
+            <option value="none">No GPU (CPU-only)</option>
+          </select>
+          <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">
+            {state.gpuType === "nvidia" && "Requires NVIDIA Container Toolkit installed on the host."}
+            {state.gpuType === "amd" && "Uses Vulkan for GPU inference. Best single-GPU token generation speed."}
+            {state.gpuType === "amd-rocm" && "Uses ROCm/hipBLAS. Better prompt processing and multi-GPU support."}
+            {state.gpuType === "none" && "CPU-only inference with OpenBLAS. Functional but significantly slower."}
+          </p>
         </section>
       )}
 

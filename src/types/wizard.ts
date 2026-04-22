@@ -1,3 +1,5 @@
+export type GpuType = "nvidia" | "amd" | "amd-rocm" | "none";
+
 export interface WizardState {
   currentStep: number;
   totalSteps: number;
@@ -17,6 +19,7 @@ export interface WizardState {
   deploymentTarget: "standard" | "compose-export";
   storagePath: string;
   gpuEnabled: boolean;
+  gpuType: GpuType;
 }
 
 export type WizardAction =
@@ -34,4 +37,5 @@ export type WizardAction =
   | { type: "SET_LLM_INTERFACE"; interfaceId: string }
   | { type: "SET_DEPLOYMENT_TARGET"; target: "standard" | "compose-export" }
   | { type: "SET_STORAGE_PATH"; path: string }
-  | { type: "SET_GPU_ENABLED"; enabled: boolean };
+  | { type: "SET_GPU_ENABLED"; enabled: boolean }
+  | { type: "SET_GPU_TYPE"; gpuType: GpuType };

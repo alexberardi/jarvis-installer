@@ -253,8 +253,21 @@ function generateExportServiceBlock(
   const hostPort = state.portOverrides[service.id] ?? service.port;
   const containerPort = getContainerPort(service);
 
+  // GPU services: select image variant based on GPU type
+  let image = service.image;
+  if (service.gpu) {
+    const variantSuffix: Record<string, string> = {
+      nvidia: "-cuda",
+      amd: "-vulkan",
+      "amd-rocm": "-rocm",
+      none: "-cpu",
+    };
+    const suffix = variantSuffix[state.gpuType] ?? "-cpu";
+    image = image.includes(":") ? image + suffix : image + ":latest" + suffix;
+  }
+
   lines.push(`  ${service.id}:`);
-  lines.push(`    image: ${service.image}`);
+  lines.push(`    image: ${image}`);
   lines.push(`    container_name: ${service.id}`);
 
   // Ports
@@ -401,17 +414,28 @@ function generateExportServiceBlock(
   lines.push("    extra_hosts:");
   lines.push('      - "host.docker.internal:host-gateway"');
 
-  // GPU config — only when user has confirmed GPU availability
+  // GPU config — varies by selected GPU type
   if (service.gpu && state.gpuEnabled) {
-    lines.push("    ipc: host");
-    lines.push('    shm_size: "8gb"');
-    lines.push("    deploy:");
-    lines.push("      resources:");
-    lines.push("        reservations:");
-    lines.push("          devices:");
-    lines.push("            - driver: nvidia");
-    lines.push("              count: all");
-    lines.push("              capabilities: [gpu]");
+    if (state.gpuType === "nvidia") {
+      lines.push("    ipc: host");
+      lines.push('    shm_size: "8gb"');
+      lines.push("    deploy:");
+      lines.push("      resources:");
+      lines.push("        reservations:");
+      lines.push("          devices:");
+      lines.push("            - driver: nvidia");
+      lines.push("              count: all");
+      lines.push("              capabilities: [gpu]");
+    } else if (state.gpuType === "amd" || state.gpuType === "amd-rocm") {
+      lines.push("    devices:");
+      lines.push("      - /dev/dri:/dev/dri");
+      lines.push("      - /dev/kfd:/dev/kfd");
+      lines.push("    ipc: host");
+      lines.push('    shm_size: "8gb"');
+      lines.push("    group_add:");
+      lines.push("      - video");
+      lines.push("      - render");
+    }
   }
 
   // Healthcheck
