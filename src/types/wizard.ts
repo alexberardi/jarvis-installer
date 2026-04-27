@@ -20,6 +20,8 @@ export interface WizardState {
   storagePath: string;
   gpuEnabled: boolean;
   gpuType: GpuType;
+  /** In-flight Jarvis Relay integration. Optional until the full feature lands. */
+  relayEnabled?: boolean;
 }
 
 export type WizardAction =
