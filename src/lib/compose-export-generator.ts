@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import type { WizardState } from "@/types/wizard";
-import type { ServiceRegistry, ServiceDefinition } from "@/types/service-registry";
+import type { ServiceRegistry, ServiceDefinition, WorkerDefinition } from "@/types/service-registry";
 import { getAllEnabledServices, getInfraForServices } from "@/lib/compose-generator";
 
 interface AppKeyEntry {
@@ -224,6 +224,23 @@ export function generateComposeExport(
         storagePath,
       ),
     );
+    if (service.workers) {
+      for (const worker of service.workers) {
+        lines.push("");
+        lines.push(
+          ...generateExportWorkerBlock(
+            worker,
+            service,
+            state,
+            registry,
+            appKeys,
+            secrets,
+            allEnabled,
+            storagePath,
+          ),
+        );
+      }
+    }
   }
 
   // Networks
@@ -240,6 +257,49 @@ function getContainerPort(service: ServiceDefinition): number {
   return service.containerPort ?? service.port;
 }
 
+function getExportImage(service: ServiceDefinition, state: WizardState): string {
+  let image = service.image;
+  if (service.gpu) {
+    const variantSuffix: Record<string, string> = {
+      nvidia: "-cuda",
+      amd: "-vulkan",
+      "amd-rocm": "-rocm",
+      none: "-cpu",
+    };
+    const suffix = variantSuffix[state.gpuType] ?? "-cpu";
+    image = image.includes(":") ? image + suffix : image + ":latest" + suffix;
+  }
+  return image;
+}
+
+function pushExportGpuConfig(
+  lines: string[],
+  service: ServiceDefinition,
+  state: WizardState,
+): void {
+  if (!service.gpu || !state.gpuEnabled) return;
+  if (state.gpuType === "nvidia") {
+    lines.push("    ipc: host");
+    lines.push('    shm_size: "8gb"');
+    lines.push("    deploy:");
+    lines.push("      resources:");
+    lines.push("        reservations:");
+    lines.push("          devices:");
+    lines.push("            - driver: nvidia");
+    lines.push("              count: all");
+    lines.push("              capabilities: [gpu]");
+  } else if (state.gpuType === "amd" || state.gpuType === "amd-rocm") {
+    lines.push("    devices:");
+    lines.push("      - /dev/dri:/dev/dri");
+    lines.push("      - /dev/kfd:/dev/kfd");
+    lines.push("    ipc: host");
+    lines.push('    shm_size: "8gb"');
+    lines.push("    group_add:");
+    lines.push("      - video");
+    lines.push("      - render");
+  }
+}
+
 function generateExportServiceBlock(
   service: ServiceDefinition,
   state: WizardState,
@@ -253,18 +313,7 @@ function generateExportServiceBlock(
   const hostPort = state.portOverrides[service.id] ?? service.port;
   const containerPort = getContainerPort(service);
 
-  // GPU services: select image variant based on GPU type
-  let image = service.image;
-  if (service.gpu) {
-    const variantSuffix: Record<string, string> = {
-      nvidia: "-cuda",
-      amd: "-vulkan",
-      "amd-rocm": "-rocm",
-      none: "-cpu",
-    };
-    const suffix = variantSuffix[state.gpuType] ?? "-cpu";
-    image = image.includes(":") ? image + suffix : image + ":latest" + suffix;
-  }
+  const image = getExportImage(service, state);
 
   lines.push(`  ${service.id}:`);
   lines.push(`    image: ${image}`);
@@ -314,6 +363,10 @@ function generateExportServiceBlock(
   // Service-specific extra env vars
   if (service.id === "jarvis-command-center" && state.llmInterface) {
     lines.push(`      LLM_INTERFACE_SEED: "${state.llmInterface}"`);
+  }
+
+  if (service.id === "jarvis-command-center" && state.relayEnabled) {
+    lines.push('      JARVIS_RELAY_URL: "https://relay.jarvisautomation.io"');
   }
 
   if (service.id === "jarvis-llm-proxy-api") {
@@ -414,29 +467,7 @@ function generateExportServiceBlock(
   lines.push("    extra_hosts:");
   lines.push('      - "host.docker.internal:host-gateway"');
 
-  // GPU config — varies by selected GPU type
-  if (service.gpu && state.gpuEnabled) {
-    if (state.gpuType === "nvidia") {
-      lines.push("    ipc: host");
-      lines.push('    shm_size: "8gb"');
-      lines.push("    deploy:");
-      lines.push("      resources:");
-      lines.push("        reservations:");
-      lines.push("          devices:");
-      lines.push("            - driver: nvidia");
-      lines.push("              count: all");
-      lines.push("              capabilities: [gpu]");
-    } else if (state.gpuType === "amd" || state.gpuType === "amd-rocm") {
-      lines.push("    devices:");
-      lines.push("      - /dev/dri:/dev/dri");
-      lines.push("      - /dev/kfd:/dev/kfd");
-      lines.push("    ipc: host");
-      lines.push('    shm_size: "8gb"');
-      lines.push("    group_add:");
-      lines.push("      - video");
-      lines.push("      - render");
-    }
-  }
+  pushExportGpuConfig(lines, service, state);
 
   // Healthcheck
   lines.push("    healthcheck:");
@@ -533,4 +564,119 @@ db.close()
 print("Config seed complete")
 '
 exec uvicorn app.main:app --host 0.0.0.0 --port ${configContainerPort}`;
+}
+
+function generateExportWorkerBlock(
+  worker: WorkerDefinition,
+  parent: ServiceDefinition,
+  state: WizardState,
+  registry: ServiceRegistry,
+  appKeys: Map<string, AppKeyEntry>,
+  secrets: SecretsMap,
+  allEnabled: ServiceDefinition[],
+  storagePath: string,
+): string[] {
+  const lines: string[] = [];
+  const image = getExportImage(parent, state);
+  const overrides = worker.envOverrides ?? {};
+  const overrideKeys = new Set(Object.keys(overrides));
+
+  lines.push(`  ${worker.id}:`);
+  lines.push(`    image: ${image}`);
+  lines.push(`    container_name: ${worker.id}`);
+
+  lines.push("    environment:");
+
+  if (parent.database) {
+    const driver = parent.dbDriverPrefix ?? "postgresql://";
+    const dbUrl = `${driver}${secrets.dbUser}:${secrets.pgPassword}@postgres:5432/${parent.database}`;
+    if (!overrideKeys.has("DATABASE_URL")) lines.push(`      DATABASE_URL: "${dbUrl}"`);
+    if (!overrideKeys.has("MIGRATIONS_DATABASE_URL")) {
+      lines.push(`      MIGRATIONS_DATABASE_URL: "${dbUrl}"`);
+    }
+  }
+
+  // Worker shares the parent's app credentials (same app id).
+  const appKey = appKeys.get(parent.id);
+  if (appKey) {
+    if (!overrideKeys.has("JARVIS_APP_ID")) {
+      lines.push(`      JARVIS_APP_ID: "${parent.id}"`);
+    }
+    if (!overrideKeys.has("JARVIS_APP_KEY")) {
+      lines.push(`      JARVIS_APP_KEY: "${appKey.rawKey}"`);
+    }
+  }
+
+  for (const env of parent.envVars) {
+    if (env.name === "DATABASE_URL" || env.name === "MIGRATIONS_DATABASE_URL") continue;
+    if (overrideKeys.has(env.name)) continue;
+    if (env.secretRef) {
+      const value = state.secrets[env.secretRef] ?? "";
+      lines.push(`      ${env.name}: "${value}"`);
+    } else if (env.default) {
+      lines.push(`      ${env.name}: "${env.default}"`);
+    }
+  }
+
+  const authService = allEnabled.find((s) => s.id === "jarvis-auth");
+  if (
+    parent.id !== "jarvis-auth" &&
+    parent.dependsOn.includes("jarvis-auth") &&
+    authService &&
+    !overrideKeys.has("JARVIS_AUTH_BASE_URL")
+  ) {
+    const authContainerPort = getContainerPort(authService);
+    lines.push(`      JARVIS_AUTH_BASE_URL: "http://jarvis-auth:${authContainerPort}"`);
+  }
+
+  if (parent.id === "jarvis-llm-proxy-api") {
+    const llmProxyEnv: Array<[string, string]> = [
+      ["MODEL_SERVICE_URL", '"http://localhost:7705"'],
+      ["MODEL_SERVICE_PORT", '"7705"'],
+      ["VLLM_WORKER_MULTIPROC_METHOD", '"spawn"'],
+      ["JARVIS_MODEL_BACKEND", '"GGUF"'],
+      ["JARVIS_MODEL_CHAT_FORMAT", '"chatml"'],
+      ["JARVIS_MODEL_CONTEXT_WINDOW", '"32768"'],
+      ["REDIS_URL", `"redis://:${secrets.redisPassword}@redis:6379/0"`],
+    ];
+    for (const [key, val] of llmProxyEnv) {
+      if (!overrideKeys.has(key)) lines.push(`      ${key}: ${val}`);
+    }
+  }
+
+  for (const [key, val] of Object.entries(overrides)) {
+    lines.push(`      ${key}: "${val}"`);
+  }
+
+  lines.push(`    command: ${worker.command}`);
+
+  lines.push("    depends_on:");
+  lines.push(`      ${parent.id}:`);
+  lines.push("        condition: service_healthy");
+  for (const dep of parent.dependsOn) {
+    const isInfra = registry.infrastructure.some((i) => i.id === dep);
+    if (!isInfra) continue;
+    lines.push(`      ${dep}:`);
+    lines.push(`        condition: ${dep === "postgres" ? "service_healthy" : "service_started"}`);
+  }
+
+  pushExportGpuConfig(lines, parent, state);
+
+  const vols: string[] = [];
+  if (parent.gpu || parent.id === "jarvis-llm-proxy-api") {
+    vols.push(`      - ${storagePath}/models:/app/.models`);
+  }
+  if (vols.length > 0) {
+    lines.push("    volumes:");
+    lines.push(...vols);
+  }
+
+  lines.push("    extra_hosts:");
+  lines.push('      - "host.docker.internal:host-gateway"');
+
+  lines.push("    networks:");
+  lines.push("      - jarvis");
+  lines.push("    restart: unless-stopped");
+
+  return lines;
 }

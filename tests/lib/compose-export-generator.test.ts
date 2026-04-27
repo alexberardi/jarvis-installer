@@ -1,0 +1,68 @@
+import { describe, it, expect } from "vitest";
+import { generateComposeExport } from "@/lib/compose-export-generator";
+import { parseRegistry } from "@/lib/service-registry";
+import { makeState } from "../helpers/make-state";
+import registryJson from "../../public/service-registry.json";
+
+const registry = parseRegistry(registryJson);
+
+describe("compose-export-generator: worker emission", () => {
+  function nvidiaState() {
+    return makeState({
+      gpuEnabled: true,
+      gpuType: "nvidia",
+    });
+  }
+
+  it("emits llm-proxy-worker as a sibling service", () => {
+    const output = generateComposeExport(nvidiaState(), registry);
+    expect(output).toContain("llm-proxy-worker:");
+    expect(output).toContain("container_name: llm-proxy-worker");
+  });
+
+  it("worker uses parent command and env override", () => {
+    const output = generateComposeExport(nvidiaState(), registry);
+    expect(output).toContain("command: python scripts/queue_worker.py");
+    expect(output).toContain('LLM_PROXY_PROCESS_ROLE: "worker"');
+    expect(output).toContain('MODEL_SERVICE_URL: "http://jarvis-llm-proxy-api:7705"');
+  });
+
+  it("worker depends_on parent service healthy", () => {
+    const output = generateComposeExport(nvidiaState(), registry);
+    const workerBlock = output.slice(output.indexOf("llm-proxy-worker:"));
+    expect(workerBlock).toMatch(
+      /depends_on:[\s\S]*jarvis-llm-proxy-api:\s*\n\s*condition: service_healthy/,
+    );
+  });
+
+  it("worker inherits parent NVIDIA GPU deploy block", () => {
+    const output = generateComposeExport(nvidiaState(), registry);
+    const workerStart = output.indexOf("llm-proxy-worker:");
+    const rest = output.slice(workerStart + "llm-proxy-worker:".length);
+    const workerEnd = rest.search(/\n  [a-z][a-z0-9-]*:\n/);
+    const workerOnly = workerEnd > 0 ? rest.slice(0, workerEnd) : rest;
+    expect(workerOnly).toContain("driver: nvidia");
+    expect(workerOnly).toContain("capabilities: [gpu]");
+    expect(workerOnly).toContain("ipc: host");
+  });
+
+  it("worker has no ports and no healthcheck", () => {
+    const output = generateComposeExport(nvidiaState(), registry);
+    const workerStart = output.indexOf("llm-proxy-worker:");
+    const rest = output.slice(workerStart + "llm-proxy-worker:".length);
+    const workerEnd = rest.search(/\n  [a-z][a-z0-9-]*:\n/);
+    const workerOnly = workerEnd > 0 ? rest.slice(0, workerEnd) : rest;
+    expect(workerOnly).not.toContain("ports:");
+    expect(workerOnly).not.toContain("healthcheck:");
+  });
+
+  it("worker shares parent app credentials", () => {
+    const output = generateComposeExport(nvidiaState(), registry);
+    const workerStart = output.indexOf("llm-proxy-worker:");
+    const rest = output.slice(workerStart + "llm-proxy-worker:".length);
+    const workerEnd = rest.search(/\n  [a-z][a-z0-9-]*:\n/);
+    const workerOnly = workerEnd > 0 ? rest.slice(0, workerEnd) : rest;
+    expect(workerOnly).toContain('JARVIS_APP_ID: "jarvis-llm-proxy-api"');
+    expect(workerOnly).toContain("JARVIS_APP_KEY:");
+  });
+});

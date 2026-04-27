@@ -1,5 +1,5 @@
 import type { WizardState } from "@/types/wizard";
-import type { ServiceRegistry, ServiceDefinition, InfrastructureDefinition } from "@/types/service-registry";
+import type { ServiceRegistry, ServiceDefinition, InfrastructureDefinition, WorkerDefinition } from "@/types/service-registry";
 import { getCoreServices, getRecommendedServices, getOptionalServices, getRequiredInfrastructure } from "@/lib/service-registry";
 import { serviceIdToPortVar } from "@/lib/port-utils";
 
@@ -59,10 +59,16 @@ export function generateCompose(state: WizardState, registry: ServiceRegistry): 
     lines.push(...generateInfraBlock(inf, state));
   }
 
-  // Application services
+  // Application services (and any sibling workers)
   for (const service of allEnabled) {
     lines.push("");
     lines.push(...generateServiceBlock(service, state, registry));
+    if (service.workers) {
+      for (const worker of service.workers) {
+        lines.push("");
+        lines.push(...generateWorkerBlock(worker, service, registry));
+      }
+    }
   }
 
   // Networks
@@ -226,6 +232,65 @@ function generateServiceBlock(
   lines.push("      interval: 30s");
   lines.push("      timeout: 10s");
   lines.push("      retries: 3");
+
+  lines.push("    networks:");
+  lines.push("      - jarvis");
+  lines.push("    restart: unless-stopped");
+
+  return lines;
+}
+
+function generateWorkerBlock(
+  worker: WorkerDefinition,
+  parent: ServiceDefinition,
+  registry: ServiceRegistry,
+): string[] {
+  const lines: string[] = [];
+  const overrides = worker.envOverrides ?? {};
+  const overrideKeys = new Set(Object.keys(overrides));
+
+  lines.push(`  ${worker.id}:`);
+  lines.push(`    image: ${parent.image}`);
+  lines.push(`    container_name: ${worker.id}`);
+
+  lines.push("    environment:");
+  if (parent.database) {
+    const driver = parent.dbDriverPrefix ?? "postgresql://";
+    if (!overrideKeys.has("DATABASE_URL")) {
+      lines.push(
+        `      DATABASE_URL: ${driver}\${DB_USER:-jarvis}:\${POSTGRES_PASSWORD}@postgres:5432/${parent.database}`,
+      );
+    }
+    if (!overrideKeys.has("MIGRATIONS_DATABASE_URL")) {
+      lines.push(
+        `      MIGRATIONS_DATABASE_URL: ${driver}\${DB_USER:-jarvis}:\${POSTGRES_PASSWORD}@postgres:5432/${parent.database}`,
+      );
+    }
+  }
+  for (const env of parent.envVars) {
+    if (env.name === "DATABASE_URL" || env.name === "MIGRATIONS_DATABASE_URL") continue;
+    if (overrideKeys.has(env.name)) continue;
+    if (env.secretRef) {
+      lines.push(`      ${env.name}: \${${env.secretRef}}`);
+    } else if (env.default) {
+      lines.push(`      ${env.name}: ${env.default}`);
+    }
+  }
+  for (const [key, val] of Object.entries(overrides)) {
+    lines.push(`      ${key}: ${val}`);
+  }
+
+  lines.push(`    command: ${worker.command}`);
+
+  lines.push("    depends_on:");
+  lines.push(`      ${parent.id}:`);
+  lines.push("        condition: service_healthy");
+  for (const dep of parent.dependsOn) {
+    const isInfra = registry.infrastructure.some((i) => i.id === dep);
+    if (!isInfra) continue;
+    lines.push(`      ${dep}:`);
+    lines.push(`        condition: ${dep === "postgres" ? "service_healthy" : "service_started"}`);
+  }
 
   lines.push("    networks:");
   lines.push("      - jarvis");

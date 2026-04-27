@@ -24,6 +24,15 @@ export interface LlmInterfaceOption {
   default?: boolean;
 }
 
+export interface WorkerDefinition {
+  /** Compose service id (also used as container_name). */
+  id: string;
+  /** Command to launch the worker (e.g. "python scripts/queue_worker.py"). */
+  command: string;
+  /** Env vars to add or override on top of the parent service's environment. */
+  envOverrides?: Record<string, string>;
+}
+
 export interface ModelPreset {
   id: string;
   name: string;
@@ -62,6 +71,8 @@ export interface ServiceDefinition {
   containerPort?: number;
   /** Whether this service requires GPU access */
   gpu?: boolean;
+  /** Sibling worker containers that share this service's image and most config. */
+  workers?: WorkerDefinition[];
 }
 
 export interface InfrastructureDefinition {

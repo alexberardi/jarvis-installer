@@ -129,4 +129,35 @@ describe("compose-generator", () => {
     expect(output).not.toContain("./models:/models:ro");
     expect(output).not.toContain("WHISPER_MODEL:");
   });
+
+  describe("worker emission", () => {
+    it("emits llm-proxy-worker as a sibling service", () => {
+      const output = generateCompose(makeState(), registry);
+      expect(output).toContain("llm-proxy-worker:");
+      expect(output).toContain("container_name: llm-proxy-worker");
+    });
+
+    it("worker uses parent command and env override", () => {
+      const output = generateCompose(makeState(), registry);
+      expect(output).toContain("command: python scripts/queue_worker.py");
+      expect(output).toContain("LLM_PROXY_PROCESS_ROLE: worker");
+      expect(output).toContain("MODEL_SERVICE_URL: http://jarvis-llm-proxy-api:7705");
+    });
+
+    it("worker depends_on parent service healthy", () => {
+      const output = generateCompose(makeState(), registry);
+      const workerBlock = output.slice(output.indexOf("llm-proxy-worker:"));
+      expect(workerBlock).toMatch(/depends_on:[\s\S]*jarvis-llm-proxy-api:\s*\n\s*condition: service_healthy/);
+    });
+
+    it("worker has no ports and no healthcheck", () => {
+      const output = generateCompose(makeState(), registry);
+      const workerStart = output.indexOf("llm-proxy-worker:");
+      const rest = output.slice(workerStart + "llm-proxy-worker:".length);
+      const workerEnd = rest.search(/\n  [a-z][a-z0-9-]*:\n/);
+      const workerOnly = workerEnd > 0 ? rest.slice(0, workerEnd) : rest;
+      expect(workerOnly).not.toContain("ports:");
+      expect(workerOnly).not.toContain("healthcheck:");
+    });
+  });
 });
