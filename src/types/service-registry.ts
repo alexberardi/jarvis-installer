@@ -81,6 +81,8 @@ export interface ServiceDefinition {
   cpuFallback?: boolean;
   /** true = mount ${MODELS_DIR:-./.models}:/app/.models (LLM-style services). */
   modelVolume?: boolean;
+  /** Volume mounts for this service (e.g., Docker socket, host compose dir). */
+  volumes?: string[];
   /** Sibling worker containers that share this service's image and most config. */
   workers?: WorkerDefinition[];
 }

@@ -472,6 +472,13 @@ function generateExportServiceBlock(
   if (service.modelVolume) {
     vols.push(`      - ${storagePath}/models:/app/.models`);
   }
+  // Service-declared mounts from the registry (e.g. /var/run/docker.sock,
+  // ${HOME}/.jarvis/compose:/host/compose for jarvis-admin).
+  if (service.volumes) {
+    for (const vol of service.volumes) {
+      vols.push(`      - ${vol}`);
+    }
+  }
   if (vols.length > 0) {
     lines.push("    volumes:");
     lines.push(...vols);
