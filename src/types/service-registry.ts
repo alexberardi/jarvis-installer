@@ -71,6 +71,16 @@ export interface ServiceDefinition {
   containerPort?: number;
   /** Whether this service requires GPU access */
   gpu?: boolean;
+  /**
+   * For `gpu: true` services that ship a CPU image alongside GPU variants
+   * (e.g. whisper publishes :latest, :latest-cuda, :latest-rocm). When set,
+   * the variant suffix is only applied for GPU types we actually publish
+   * (nvidia/amd-rocm); other GPUs / CPU hosts use the plain image with no
+   * GPU runtime config.
+   */
+  cpuFallback?: boolean;
+  /** true = mount ${MODELS_DIR:-./.models}:/app/.models (LLM-style services). */
+  modelVolume?: boolean;
   /** Sibling worker containers that share this service's image and most config. */
   workers?: WorkerDefinition[];
 }

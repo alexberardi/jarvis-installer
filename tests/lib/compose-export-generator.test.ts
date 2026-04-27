@@ -66,3 +66,44 @@ describe("compose-export-generator: worker emission", () => {
     expect(workerOnly).toContain("JARVIS_APP_KEY:");
   });
 });
+
+describe("compose-export-generator: cpuFallback (whisper)", () => {
+  function whisperState(gpuType: "nvidia" | "amd" | "amd-rocm" | "none", gpuEnabled = true) {
+    return makeState({ gpuEnabled, gpuType, enabledModules: ["jarvis-whisper-api"] });
+  }
+
+  it("uses -cuda variant on NVIDIA hosts", () => {
+    const output = generateComposeExport(whisperState("nvidia"), registry);
+    expect(output).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest-cuda");
+  });
+
+  it("uses -rocm variant on AMD ROCm hosts", () => {
+    const output = generateComposeExport(whisperState("amd-rocm"), registry);
+    expect(output).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest-rocm");
+  });
+
+  it("falls back to plain CPU image on AMD Vulkan hosts (no -vulkan tag published)", () => {
+    const output = generateComposeExport(whisperState("amd"), registry);
+    const blockStart = output.search(/\n {2}jarvis-whisper-api:\n/);
+    const block = output.slice(blockStart + 1);
+    const blockEnd = block.slice(1).search(/\n {2}[a-z][a-z0-9-]*:\n/);
+    const whisperOnly = blockEnd > 0 ? block.slice(0, blockEnd + 1) : block;
+    expect(whisperOnly).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest");
+    expect(whisperOnly).not.toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest-vulkan");
+    expect(whisperOnly).not.toContain("driver: nvidia");
+  });
+
+  it("does NOT mount the models volume on whisper", () => {
+    const output = generateComposeExport(whisperState("nvidia"), registry);
+    const blockStart = output.search(/\n {2}jarvis-whisper-api:\n/);
+    const block = output.slice(blockStart + 1);
+    const blockEnd = block.slice(1).search(/\n {2}[a-z][a-z0-9-]*:\n/);
+    const whisperOnly = blockEnd > 0 ? block.slice(0, blockEnd + 1) : block;
+    expect(whisperOnly).not.toContain("/models:/app/.models");
+  });
+
+  it("still mounts models volume on llm-proxy (modelVolume: true)", () => {
+    const output = generateComposeExport(whisperState("nvidia"), registry);
+    expect(output).toContain("/models:/app/.models");
+  });
+});

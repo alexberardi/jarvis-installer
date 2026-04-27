@@ -102,6 +102,8 @@
       "dependsOn": ["postgres", "jarvis-auth", "jarvis-config-service"],
       "database": "jarvis_whisper",
       "dbDriverPrefix": "postgresql+psycopg2://",
+      "gpu": true,
+      "cpuFallback": true,
       "modelOptions": [
         { "id": "base.en", "name": "Base English", "size": "~140MB", "default": true, "builtin": true },
         { "id": "small.en", "name": "Small English", "size": "~460MB" },
@@ -138,6 +140,7 @@
       "database": "jarvis_llm_proxy",
       "dbDriverPrefix": "postgresql+psycopg2://",
       "gpu": true,
+      "modelVolume": true,
       "envVars": [
         { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
         { "name": "MIGRATIONS_DATABASE_URL", "description": "PostgreSQL URL for Alembic", "required": true },

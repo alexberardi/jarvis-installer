@@ -257,9 +257,21 @@ function getContainerPort(service: ServiceDefinition): number {
   return service.containerPort ?? service.port;
 }
 
+/**
+ * GPU types we publish image variants for on `cpuFallback` services.
+ * Other GPU types (amd Vulkan, none) fall back to the plain CPU image.
+ */
+const CPU_FALLBACK_GPU_VARIANTS = new Set<string>(["nvidia", "amd-rocm"]);
+
+function shouldUseGpuVariant(service: ServiceDefinition, gpuType: string): boolean {
+  if (!service.gpu) return false;
+  if (service.cpuFallback && !CPU_FALLBACK_GPU_VARIANTS.has(gpuType)) return false;
+  return true;
+}
+
 function getExportImage(service: ServiceDefinition, state: WizardState): string {
   let image = service.image;
-  if (service.gpu) {
+  if (shouldUseGpuVariant(service, state.gpuType)) {
     const variantSuffix: Record<string, string> = {
       nvidia: "-cuda",
       amd: "-vulkan",
@@ -277,7 +289,7 @@ function pushExportGpuConfig(
   service: ServiceDefinition,
   state: WizardState,
 ): void {
-  if (!service.gpu || !state.gpuEnabled) return;
+  if (!shouldUseGpuVariant(service, state.gpuType) || !state.gpuEnabled) return;
   if (state.gpuType === "nvidia") {
     lines.push("    ipc: host");
     lines.push('    shm_size: "8gb"');
@@ -455,7 +467,9 @@ function generateExportServiceBlock(
   if (nonDefaultWhisper) {
     vols.push("      - ./models:/models:ro");
   }
-  if (service.gpu || service.id === "jarvis-llm-proxy-api") {
+  // modelVolume: only LLM-style services that load weights from disk need this
+  // bind. Whisper bakes its model into the image and shouldn't get a stray mount.
+  if (service.modelVolume) {
     vols.push(`      - ${storagePath}/models:/app/.models`);
   }
   if (vols.length > 0) {
@@ -663,7 +677,7 @@ function generateExportWorkerBlock(
   pushExportGpuConfig(lines, parent, state);
 
   const vols: string[] = [];
-  if (parent.gpu || parent.id === "jarvis-llm-proxy-api") {
+  if (parent.modelVolume) {
     vols.push(`      - ${storagePath}/models:/app/.models`);
   }
   if (vols.length > 0) {
