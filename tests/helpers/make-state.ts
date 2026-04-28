@@ -22,6 +22,7 @@ export function makeState(overrides: Partial<WizardState> = {}): WizardState {
     storagePath: "/var/lib/jarvis",
     gpuEnabled: false,
     gpuType: "nvidia",
+    relayEnabled: false,
     ...overrides,
   };
 }

@@ -201,6 +201,34 @@ export default function ConfigurationStep() {
         </section>
       )}
 
+      {/* Jarvis Relay */}
+      <section>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-medium">Enable Jarvis Relay</h3>
+            <p className="text-xs text-[var(--color-text-secondary)]">
+              Routes OAuth callbacks through a cloud relay for external providers (Google, Spotify, etc.)
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={state.relayEnabled}
+            data-testid="toggle-relay"
+            onClick={() => dispatch({ type: "SET_RELAY_ENABLED", enabled: !state.relayEnabled })}
+            className={`relative h-6 w-11 rounded-full transition-colors ${
+              state.relayEnabled ? "bg-[var(--color-accent)]" : "bg-[var(--color-bg-tertiary)]"
+            }`}
+          >
+            <span
+              className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+                state.relayEnabled ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+      </section>
+
       {/* Secrets */}
       <section>
         <div className="mb-3 flex items-center justify-between">

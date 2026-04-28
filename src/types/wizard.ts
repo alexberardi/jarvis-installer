@@ -20,8 +20,7 @@ export interface WizardState {
   storagePath: string;
   gpuEnabled: boolean;
   gpuType: GpuType;
-  /** In-flight Jarvis Relay integration. Optional until the full feature lands. */
-  relayEnabled?: boolean;
+  relayEnabled: boolean;
 }
 
 export type WizardAction =
@@ -40,4 +39,5 @@ export type WizardAction =
   | { type: "SET_DEPLOYMENT_TARGET"; target: "standard" | "compose-export" }
   | { type: "SET_STORAGE_PATH"; path: string }
   | { type: "SET_GPU_ENABLED"; enabled: boolean }
-  | { type: "SET_GPU_TYPE"; gpuType: GpuType };
+  | { type: "SET_GPU_TYPE"; gpuType: GpuType }
+  | { type: "SET_RELAY_ENABLED"; enabled: boolean };

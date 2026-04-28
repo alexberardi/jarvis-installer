@@ -17,6 +17,7 @@ const initialState: WizardState = {
   storagePath: "/var/lib/jarvis",
   gpuEnabled: true,
   gpuType: "nvidia",
+  relayEnabled: false,
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -76,6 +77,8 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
       return { ...state, gpuEnabled: action.enabled };
     case "SET_GPU_TYPE":
       return { ...state, gpuType: action.gpuType };
+    case "SET_RELAY_ENABLED":
+      return { ...state, relayEnabled: action.enabled };
     default:
       return state;
   }

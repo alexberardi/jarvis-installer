@@ -67,5 +67,12 @@ export function generateEnv(state: WizardState, registry: ServiceRegistry): stri
   }
   lines.push("");
 
+  // Jarvis Relay
+  if (state.relayEnabled) {
+    lines.push("# --- Jarvis Relay ---");
+    lines.push("JARVIS_RELAY_URL=https://relay.jarvisautomation.io");
+    lines.push("");
+  }
+
   return lines.join("\n");
 }
