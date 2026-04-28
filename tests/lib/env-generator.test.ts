@@ -69,4 +69,30 @@ describe("env-generator", () => {
     );
     expect(env).toContain("WHISPER_API_PORT=7706");
   });
+
+  describe("Jarvis Relay", () => {
+    it("writes JARVIS_RELAY_URL with default URL when enabled and no custom value", () => {
+      const env = generateEnv(
+        makeState({ relayEnabled: true, relayUrl: "" }),
+        registry,
+      );
+      expect(env).toContain("JARVIS_RELAY_URL=https://relay.jarvisautomation.io");
+    });
+
+    it("writes JARVIS_RELAY_URL with custom value when provided", () => {
+      const env = generateEnv(
+        makeState({ relayEnabled: true, relayUrl: "https://relay.example.com" }),
+        registry,
+      );
+      expect(env).toContain("JARVIS_RELAY_URL=https://relay.example.com");
+    });
+
+    it("omits JARVIS_RELAY_URL entirely when relayEnabled is false", () => {
+      const env = generateEnv(
+        makeState({ relayEnabled: false, relayUrl: "https://relay.example.com" }),
+        registry,
+      );
+      expect(env).not.toContain("JARVIS_RELAY_URL=");
+    });
+  });
 });

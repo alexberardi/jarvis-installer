@@ -107,3 +107,29 @@ describe("compose-export-generator: cpuFallback (whisper)", () => {
     expect(output).toContain("/models:/app/.models");
   });
 });
+
+describe("compose-export-generator: Jarvis Relay", () => {
+  it("emits JARVIS_RELAY_URL with default URL on command-center when enabled and no custom value", () => {
+    const output = generateComposeExport(
+      makeState({ relayEnabled: true, relayUrl: "" }),
+      registry,
+    );
+    expect(output).toContain('JARVIS_RELAY_URL: "https://relay.jarvisautomation.io"');
+  });
+
+  it("emits JARVIS_RELAY_URL with custom value when provided", () => {
+    const output = generateComposeExport(
+      makeState({ relayEnabled: true, relayUrl: "https://relay.example.com" }),
+      registry,
+    );
+    expect(output).toContain('JARVIS_RELAY_URL: "https://relay.example.com"');
+  });
+
+  it("omits JARVIS_RELAY_URL on command-center when disabled", () => {
+    const output = generateComposeExport(
+      makeState({ relayEnabled: false, relayUrl: "https://relay.example.com" }),
+      registry,
+    );
+    expect(output).not.toContain("JARVIS_RELAY_URL:");
+  });
+});
