@@ -227,6 +227,18 @@ export default function ConfigurationStep() {
             />
           </button>
         </div>
+        {state.relayEnabled && (
+          <div className="mt-3">
+            <label className="text-xs font-medium text-[var(--color-text-secondary)]">Relay URL</label>
+            <input
+              type="url"
+              value={state.relayUrl}
+              onChange={(e) => dispatch({ type: "SET_RELAY_URL", url: e.target.value })}
+              placeholder="https://relay.jarvisautomation.io"
+              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-sm"
+            />
+          </div>
+        )}
       </section>
 
       {/* Secrets */}

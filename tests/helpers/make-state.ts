@@ -23,6 +23,7 @@ export function makeState(overrides: Partial<WizardState> = {}): WizardState {
     gpuEnabled: false,
     gpuType: "nvidia",
     relayEnabled: false,
+    relayUrl: "https://relay.jarvisautomation.io",
     ...overrides,
   };
 }

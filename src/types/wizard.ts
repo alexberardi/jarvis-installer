@@ -21,6 +21,7 @@ export interface WizardState {
   gpuEnabled: boolean;
   gpuType: GpuType;
   relayEnabled: boolean;
+  relayUrl: string;
 }
 
 export type WizardAction =
@@ -40,4 +41,5 @@ export type WizardAction =
   | { type: "SET_STORAGE_PATH"; path: string }
   | { type: "SET_GPU_ENABLED"; enabled: boolean }
   | { type: "SET_GPU_TYPE"; gpuType: GpuType }
-  | { type: "SET_RELAY_ENABLED"; enabled: boolean };
+  | { type: "SET_RELAY_ENABLED"; enabled: boolean }
+  | { type: "SET_RELAY_URL"; url: string };

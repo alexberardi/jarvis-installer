@@ -378,7 +378,7 @@ function generateExportServiceBlock(
   }
 
   if (service.id === "jarvis-command-center" && state.relayEnabled) {
-    lines.push('      JARVIS_RELAY_URL: "https://relay.jarvisautomation.io"');
+    lines.push(`      JARVIS_RELAY_URL: "${state.relayUrl || 'https://relay.jarvisautomation.io'}"`);
   }
 
   if (
