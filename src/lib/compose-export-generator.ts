@@ -381,6 +381,14 @@ function generateExportServiceBlock(
     lines.push('      JARVIS_RELAY_URL: "https://relay.jarvisautomation.io"');
   }
 
+  if (
+    service.id === "jarvis-command-center" &&
+    state.enabledModules.includes("go2rtc")
+  ) {
+    const go2rtcPort = state.portOverrides["go2rtc"] ?? 1984;
+    lines.push(`      GO2RTC_URL: "http://go2rtc:${go2rtcPort}"`);
+  }
+
   if (service.id === "jarvis-llm-proxy-api") {
     lines.push('      MODEL_SERVICE_URL: "http://localhost:7705"');
     lines.push('      MODEL_SERVICE_PORT: "7705"');
