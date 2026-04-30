@@ -86,6 +86,10 @@ export function generateCompose(state: WizardState, registry: ServiceRegistry): 
       volumes.add(vol.split(":")[0]!);
     }
   }
+  // Whisper voice profiles survive container recreates
+  if (allEnabled.some((s) => s.id === "jarvis-whisper-api")) {
+    volumes.add("whisper-voice-profiles");
+  }
   for (const vol of volumes) {
     lines.push(`  ${vol}:`);
   }
@@ -197,7 +201,7 @@ function generateServiceBlock(
   const isWhisper = service.id === "jarvis-whisper-api";
   const nonDefaultWhisper = isWhisper && state.whisperModel !== "base.en";
   if (nonDefaultWhisper) {
-    lines.push(`      WHISPER_MODEL: /models/ggml-${state.whisperModel}.bin`);
+    lines.push(`      WHISPER_MODEL: /whisper-models/ggml-${state.whisperModel}.bin`);
   }
 
   // LLM interface seed for command-center
@@ -220,10 +224,11 @@ function generateServiceBlock(
     }
   }
 
-  // Volumes (whisper non-default model)
-  if (nonDefaultWhisper) {
+  // Volumes (whisper)
+  if (isWhisper) {
     lines.push("    volumes:");
-    lines.push("      - ./models:/models:ro");
+    lines.push("      - ./whisper-models:/whisper-models:ro");
+    lines.push("      - whisper-voice-profiles:/app/voice_profiles");
   }
 
   // Healthcheck

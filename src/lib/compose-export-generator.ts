@@ -412,7 +412,7 @@ function generateExportServiceBlock(
   const isWhisper = service.id === "jarvis-whisper-api";
   const nonDefaultWhisper = isWhisper && state.whisperModel !== "base.en";
   if (nonDefaultWhisper) {
-    lines.push(`      WHISPER_MODEL: "/models/ggml-${state.whisperModel}.bin"`);
+    lines.push(`      WHISPER_MODEL: "/whisper-models/ggml-${state.whisperModel}.bin"`);
   }
 
   // Command with seed scripts
@@ -472,8 +472,9 @@ function generateExportServiceBlock(
 
   // Volumes
   const vols: string[] = [];
-  if (nonDefaultWhisper) {
-    vols.push("      - ./models:/models:ro");
+  if (isWhisper) {
+    vols.push(`      - ${storagePath}/whisper-models:/whisper-models:ro`);
+    vols.push("      - whisper-voice-profiles:/app/voice_profiles");
   }
   // modelVolume: only LLM-style services that load weights from disk need this
   // bind. Whisper bakes its model into the image and shouldn't get a stray mount.
