@@ -117,16 +117,16 @@ describe("compose-generator", () => {
       }),
       registry,
     );
-    expect(output).toContain("./models:/models:ro");
-    expect(output).toContain("WHISPER_MODEL: /models/ggml-large-v3.bin");
+    expect(output).toContain("./whisper-models:/whisper-models:ro");
+    expect(output).toContain("WHISPER_MODEL: /whisper-models/ggml-large-v3.bin");
   });
 
-  it("does not add whisper volume for default model", () => {
+  it("always mounts whisper-models volume even for default model", () => {
     const output = generateCompose(
       makeState({ enabledModules: ["jarvis-whisper-api"], whisperModel: "base.en" }),
       registry,
     );
-    expect(output).not.toContain("./models:/models:ro");
+    expect(output).toContain("./whisper-models:/whisper-models:ro");
     expect(output).not.toContain("WHISPER_MODEL:");
   });
 
