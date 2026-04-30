@@ -432,7 +432,7 @@ function generateExportServiceBlock(
     for (const line of generateConfigSeedScript(allEnabled, containerPort).split("\n")) {
       lines.push(`        ${line}`);
     }
-  } else if (service.id === "jarvis-command-center") {
+  } else if (service.id === "jarvis-command-center" || service.id === "jarvis-whisper-api") {
     lines.push("    command:");
     lines.push("      - sh");
     lines.push("      - -c");
