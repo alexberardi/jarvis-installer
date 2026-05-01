@@ -182,20 +182,25 @@ export function generateComposeExport(
     lines.push("    restart: unless-stopped");
   }
 
-  // Mosquitto
+  // Mosquitto — raw MQTT (LAN) + WebSockets (external nodes via Cloudflare Tunnel)
   if (infra.some((i) => i.id === "mosquitto")) {
     const mqttHostPort = state.infraPortOverrides["mosquitto"] ?? 1884;
+    const mqttWsHostPort = state.infraPortOverrides["mosquitto-ws"] ?? 9883;
     lines.push("");
     lines.push("  mosquitto:");
     lines.push("    image: eclipse-mosquitto:2");
     lines.push("    container_name: jarvis-mosquitto");
     lines.push("    ports:");
     lines.push(`      - "${mqttHostPort}:1883"`);
+    lines.push(`      - "${mqttWsHostPort}:9001"`);
     lines.push("    command:");
     lines.push("      - sh");
     lines.push("      - -c");
     lines.push("      - |");
     lines.push("        echo 'listener 1883' > /tmp/mosquitto.conf");
+    lines.push("        echo 'protocol mqtt' >> /tmp/mosquitto.conf");
+    lines.push("        echo 'listener 9001' >> /tmp/mosquitto.conf");
+    lines.push("        echo 'protocol websockets' >> /tmp/mosquitto.conf");
     lines.push("        echo 'allow_anonymous true' >> /tmp/mosquitto.conf");
     lines.push("        exec mosquitto -c /tmp/mosquitto.conf -v");
     lines.push("    volumes:");
