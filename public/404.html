@@ -4,17 +4,11 @@
     <meta charset="UTF-8" />
     <title>Jarvis Installer</title>
     <script>
-      // SPA routing for GitHub Pages
-      // Redirects 404 requests to index.html with the path as a query param
-      var path = window.location.pathname;
-      var base = '/jarvis-installer';
-      // Strip base path so the redirect param is just the route (e.g., /configurator)
-      var route = path;
-      if (path.startsWith(base)) {
-        route = path.slice(base.length) || '/';
-      }
+      // SPA routing for GitHub Pages: served at root of custom domain.
+      // Bounce 404s to / with the original path stashed in ?redirect=.
+      var route = window.location.pathname || '/';
       window.location.replace(
-        window.location.origin + base + '/?redirect=' + encodeURIComponent(route + window.location.search + window.location.hash)
+        window.location.origin + '/?redirect=' + encodeURIComponent(route + window.location.search + window.location.hash)
       );
     </script>
   </head>
