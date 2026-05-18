@@ -65,6 +65,7 @@
       "dependsOn": ["postgres", "jarvis-auth", "jarvis-config-service"],
       "database": "jarvis_command_center",
       "dbDriverPrefix": "postgresql://",
+      "volumes": ["command-center-prompt-providers:/app/core/prompt_providers_custom"],
       "llmInterfaceOptions": [
         { "id": "Qwen25MediumUntrained", "name": "Qwen 2.5 (7B-14B)", "description": "Recommended for Qwen 2.5 models", "default": true },
         { "id": "Qwen3LargeUntrained", "name": "Qwen 3 (14B-32B)", "description": "For Qwen 3 models with thinking support" },

@@ -90,6 +90,10 @@ export function generateCompose(state: WizardState, registry: ServiceRegistry): 
   if (allEnabled.some((s) => s.id === "jarvis-whisper-api")) {
     volumes.add("whisper-voice-profiles");
   }
+  // Command-center custom prompt providers survive container recreates
+  if (allEnabled.some((s) => s.id === "jarvis-command-center")) {
+    volumes.add("command-center-prompt-providers");
+  }
   for (const vol of volumes) {
     lines.push(`  ${vol}:`);
   }
@@ -229,6 +233,12 @@ function generateServiceBlock(
     lines.push("    volumes:");
     lines.push("      - ./whisper-models:/whisper-models:ro");
     lines.push("      - whisper-voice-profiles:/app/voice_profiles");
+  }
+
+  // Command-center custom prompt providers (Pantry installs)
+  if (service.id === "jarvis-command-center") {
+    lines.push("    volumes:");
+    lines.push("      - command-center-prompt-providers:/app/core/prompt_providers_custom");
   }
 
   // Healthcheck
