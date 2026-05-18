@@ -130,6 +130,85 @@ describe("compose-generator", () => {
     expect(output).not.toContain("WHISPER_MODEL:");
   });
 
+  describe("command-center prompt-provider volume", () => {
+    it("emits command-center-prompt-providers in the top-level volumes block", () => {
+      const output = generateCompose(makeState(), registry);
+      const topLevelVolumesIdx = output.indexOf("\nvolumes:\n");
+      expect(topLevelVolumesIdx).toBeGreaterThan(-1);
+      const volumesBlock = output.slice(topLevelVolumesIdx);
+      expect(volumesBlock).toContain("command-center-prompt-providers:");
+    });
+
+    it("mounts command-center-prompt-providers under the jarvis-command-center service", () => {
+      const output = generateCompose(makeState(), registry);
+      expect(output).toContain(
+        "      - command-center-prompt-providers:/app/core/prompt_providers_custom",
+      );
+    });
+
+    it("scopes the prompt-providers mount to the jarvis-command-center service block", () => {
+      const output = generateCompose(
+        makeState({ enabledModules: ["jarvis-whisper-api"] }),
+        registry,
+      );
+      const ccStart = output.indexOf("jarvis-command-center:");
+      const rest = output.slice(ccStart + "jarvis-command-center:".length);
+      const ccEnd = rest.search(/\n  [a-z][a-z0-9-]*:\n/);
+      const ccBlock = ccEnd > 0 ? rest.slice(0, ccEnd) : rest;
+      expect(ccBlock).toContain("volumes:");
+      expect(ccBlock).toContain(
+        "- command-center-prompt-providers:/app/core/prompt_providers_custom",
+      );
+      expect(ccBlock).not.toContain("whisper-voice-profiles");
+    });
+
+    it("emits whisper and command-center volume blocks independently when both services are enabled", () => {
+      const output = generateCompose(
+        makeState({ enabledModules: ["jarvis-whisper-api"] }),
+        registry,
+      );
+
+      const whisperStart = output.indexOf("jarvis-whisper-api:");
+      const whisperRest = output.slice(whisperStart + "jarvis-whisper-api:".length);
+      const whisperEnd = whisperRest.search(/\n  [a-z][a-z0-9-]*:\n/);
+      const whisperBlock = whisperEnd > 0 ? whisperRest.slice(0, whisperEnd) : whisperRest;
+      expect(whisperBlock).toContain("./whisper-models:/whisper-models:ro");
+      expect(whisperBlock).toContain("whisper-voice-profiles:/app/voice_profiles");
+      expect(whisperBlock).not.toContain("command-center-prompt-providers");
+
+      const ccStart = output.indexOf("jarvis-command-center:");
+      const ccRest = output.slice(ccStart + "jarvis-command-center:".length);
+      const ccEnd = ccRest.search(/\n  [a-z][a-z0-9-]*:\n/);
+      const ccBlock = ccEnd > 0 ? ccRest.slice(0, ccEnd) : ccRest;
+      expect(ccBlock).toContain(
+        "command-center-prompt-providers:/app/core/prompt_providers_custom",
+      );
+      expect(ccBlock).not.toContain("whisper-voice-profiles");
+      expect(ccBlock).not.toContain("whisper-models");
+
+      const topLevelVolumesIdx = output.indexOf("\nvolumes:\n");
+      const volumesBlock = output.slice(topLevelVolumesIdx);
+      expect(volumesBlock).toContain("command-center-prompt-providers:");
+      expect(volumesBlock).toContain("whisper-voice-profiles:");
+    });
+
+    it("excludes whisper-voice-profiles from the top-level volumes when whisper is disabled", () => {
+      const output = generateCompose(makeState(), registry);
+      const topLevelVolumesIdx = output.indexOf("\nvolumes:\n");
+      const volumesBlock = output.slice(topLevelVolumesIdx);
+      expect(volumesBlock).toContain("command-center-prompt-providers:");
+      expect(volumesBlock).not.toContain("whisper-voice-profiles:");
+    });
+
+    it("emits the command-center prompt-providers mount independently of the llmInterface seed", () => {
+      const output = generateCompose(makeState({ llmInterface: "" }), registry);
+      expect(output).toContain(
+        "- command-center-prompt-providers:/app/core/prompt_providers_custom",
+      );
+      expect(output).not.toContain("LLM_INTERFACE_SEED:");
+    });
+  });
+
   describe("worker emission", () => {
     it("emits llm-proxy-worker as a sibling service", () => {
       const output = generateCompose(makeState(), registry);
