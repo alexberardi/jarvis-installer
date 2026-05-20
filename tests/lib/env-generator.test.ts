@@ -95,4 +95,21 @@ describe("env-generator", () => {
       expect(env).not.toContain("JARVIS_RELAY_URL=");
     });
   });
+
+  describe("Release Track", () => {
+    it("includes JARVIS_IMAGE_TAG=latest for stable track", () => {
+      const env = generateEnv(makeState({ releaseTrack: "stable" }), registry);
+      expect(env).toContain("JARVIS_IMAGE_TAG=latest");
+    });
+
+    it("includes JARVIS_IMAGE_TAG=dev for dev track", () => {
+      const env = generateEnv(makeState({ releaseTrack: "dev" }), registry);
+      expect(env).toContain("JARVIS_IMAGE_TAG=dev");
+    });
+
+    it("includes release track section comment", () => {
+      const env = generateEnv(makeState(), registry);
+      expect(env).toContain("# --- Release Track ---");
+    });
+  });
 });

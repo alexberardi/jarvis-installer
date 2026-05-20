@@ -22,6 +22,7 @@ export interface WizardState {
   gpuType: GpuType;
   relayEnabled: boolean;
   relayUrl: string;
+  releaseTrack: "stable" | "dev";
 }
 
 export type WizardAction =
@@ -42,4 +43,5 @@ export type WizardAction =
   | { type: "SET_GPU_ENABLED"; enabled: boolean }
   | { type: "SET_GPU_TYPE"; gpuType: GpuType }
   | { type: "SET_RELAY_ENABLED"; enabled: boolean }
-  | { type: "SET_RELAY_URL"; url: string };
+  | { type: "SET_RELAY_URL"; url: string }
+  | { type: "SET_RELEASE_TRACK"; track: "stable" | "dev" };

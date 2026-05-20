@@ -19,6 +19,7 @@ const initialState: WizardState = {
   gpuType: "nvidia",
   relayEnabled: false,
   relayUrl: "https://relay.jarvisautomation.io",
+  releaseTrack: "stable",
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -82,6 +83,8 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
       return { ...state, relayEnabled: action.enabled };
     case "SET_RELAY_URL":
       return { ...state, relayUrl: action.url };
+    case "SET_RELEASE_TRACK":
+      return { ...state, releaseTrack: action.track };
     default:
       return state;
   }

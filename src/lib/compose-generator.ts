@@ -3,6 +3,21 @@ import type { ServiceRegistry, ServiceDefinition, InfrastructureDefinition, Work
 import { getCoreServices, getRecommendedServices, getOptionalServices, getRequiredInfrastructure } from "@/lib/service-registry";
 import { serviceIdToPortVar } from "@/lib/port-utils";
 
+const FIRST_PARTY_PREFIX = "ghcr.io/alexberardi/";
+
+/**
+ * Resolve the image reference for a first-party Jarvis service.
+ * Replaces the hardcoded tag with ${JARVIS_IMAGE_TAG:-latest} so users
+ * can switch between stable (:latest) and dev (:dev) tracks via .env.
+ * Third-party images (e.g. go2rtc) are returned unchanged.
+ */
+function getServiceImage(service: ServiceDefinition): string {
+  const image = service.image;
+  if (!image.startsWith(FIRST_PARTY_PREFIX)) return image;
+  const baseImage = image.includes(":") ? image.slice(0, image.lastIndexOf(":")) : image;
+  return `${baseImage}:\${JARVIS_IMAGE_TAG:-latest}`;
+}
+
 /**
  * Returns all enabled services (core + selected recommended + selected optional).
  */
@@ -173,7 +188,7 @@ function generateServiceBlock(
   const hostPort = state.portOverrides[service.id] ?? service.port;
 
   lines.push(`  ${service.id}:`);
-  lines.push(`    image: ${service.image}`);
+  lines.push(`    image: ${getServiceImage(service)}`);
   lines.push(`    container_name: ${service.id}`);
 
   // Ports
@@ -265,7 +280,7 @@ function generateWorkerBlock(
   const overrideKeys = new Set(Object.keys(overrides));
 
   lines.push(`  ${worker.id}:`);
-  lines.push(`    image: ${parent.image}`);
+  lines.push(`    image: ${getServiceImage(parent)}`);
   lines.push(`    container_name: ${worker.id}`);
 
   lines.push("    environment:");

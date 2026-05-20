@@ -174,6 +174,28 @@ export default function ConfigurationStep() {
         </section>
       )}
 
+      {/* Release Track */}
+      <section>
+        <h3 className="mb-3 text-sm font-medium">Release Track</h3>
+        <p className="mb-3 text-xs text-[var(--color-text-secondary)]">
+          Choose which image tags to pull. Stable uses tagged releases; Dev uses the latest main branch builds.
+        </p>
+        <select
+          value={state.releaseTrack}
+          onChange={(e) => dispatch({ type: "SET_RELEASE_TRACK", track: e.target.value as "stable" | "dev" })}
+          className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-3 py-2 text-sm"
+          data-testid="release-track-select"
+        >
+          <option value="stable">Stable (tagged releases)</option>
+          <option value="dev">Dev (latest main branch)</option>
+        </select>
+        {state.releaseTrack === "dev" && (
+          <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800" data-testid="release-track-warning">
+            Dev builds may be unstable. Use for testing only.
+          </div>
+        )}
+      </section>
+
       {/* GPU type selector */}
       {allEnabled.some((s) => s.gpu) && (
         <section>

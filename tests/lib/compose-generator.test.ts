@@ -97,10 +97,16 @@ describe("compose-generator", () => {
     expect(output).toContain("jarvis-postgres-data:");
   });
 
-  it("uses correct GHCR images", () => {
+  it("uses JARVIS_IMAGE_TAG variable for first-party images", () => {
     const output = generateCompose(makeState(), registry);
-    expect(output).toContain("ghcr.io/alexberardi/jarvis-auth:latest");
-    expect(output).toContain("ghcr.io/alexberardi/jarvis-command-center:latest");
+    expect(output).toContain("ghcr.io/alexberardi/jarvis-auth:${JARVIS_IMAGE_TAG:-latest}");
+    expect(output).toContain("ghcr.io/alexberardi/jarvis-command-center:${JARVIS_IMAGE_TAG:-latest}");
+  });
+
+  it("does not use JARVIS_IMAGE_TAG for infrastructure images", () => {
+    const output = generateCompose(makeState(), registry);
+    expect(output).toContain("postgres:16-alpine");
+    expect(output).not.toMatch(/postgres.*JARVIS_IMAGE_TAG/);
   });
 
   it("includes DATABASE_URL for services with databases", () => {

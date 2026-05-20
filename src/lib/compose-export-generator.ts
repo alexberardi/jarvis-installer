@@ -165,7 +165,7 @@ export function generateComposeExport(
 
   // Grafana
   if (infra.some((i) => i.id === "grafana")) {
-    const grafanaHostPort = state.infraPortOverrides["grafana"] ?? 3001;
+    const grafanaHostPort = state.infraPortOverrides["grafana"] ?? 3000;
     lines.push("");
     lines.push("  grafana:");
     lines.push("    image: grafana/grafana:latest");
@@ -276,6 +276,15 @@ function shouldUseGpuVariant(service: ServiceDefinition, gpuType: string): boole
 
 function getExportImage(service: ServiceDefinition, state: WizardState): string {
   let image = service.image;
+  const isFirstParty = image.startsWith("ghcr.io/alexberardi/");
+
+  // Resolve the tag based on release track (compose-export bakes values inline)
+  if (isFirstParty) {
+    const tag = state.releaseTrack === "dev" ? "dev" : "latest";
+    const baseImage = image.includes(":") ? image.slice(0, image.lastIndexOf(":")) : image;
+    image = `${baseImage}:${tag}`;
+  }
+
   if (shouldUseGpuVariant(service, state.gpuType)) {
     const variantSuffix: Record<string, string> = {
       nvidia: "-cuda",

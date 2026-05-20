@@ -108,6 +108,34 @@ describe("compose-export-generator: cpuFallback (whisper)", () => {
   });
 });
 
+describe("compose-export-generator: release track", () => {
+  it("uses :latest tag when releaseTrack is stable", () => {
+    const output = generateComposeExport(makeState({ releaseTrack: "stable" }), registry);
+    expect(output).toContain("ghcr.io/alexberardi/jarvis-auth:latest");
+    expect(output).toContain("ghcr.io/alexberardi/jarvis-command-center:latest");
+  });
+
+  it("uses :dev tag when releaseTrack is dev", () => {
+    const output = generateComposeExport(makeState({ releaseTrack: "dev" }), registry);
+    expect(output).toContain("ghcr.io/alexberardi/jarvis-auth:dev");
+    expect(output).toContain("ghcr.io/alexberardi/jarvis-command-center:dev");
+  });
+
+  it("uses :dev-cuda for GPU services on dev track with nvidia", () => {
+    const output = generateComposeExport(
+      makeState({ releaseTrack: "dev", gpuEnabled: true, gpuType: "nvidia", enabledModules: ["jarvis-whisper-api"] }),
+      registry,
+    );
+    expect(output).toContain("ghcr.io/alexberardi/jarvis-whisper-api:dev-cuda");
+  });
+
+  it("does not apply release track to infrastructure images", () => {
+    const output = generateComposeExport(makeState({ releaseTrack: "dev" }), registry);
+    expect(output).toContain("postgres:16-alpine");
+    expect(output).not.toMatch(/postgres.*:dev/);
+  });
+});
+
 describe("compose-export-generator: Jarvis Relay", () => {
   it("emits JARVIS_RELAY_URL with default URL on command-center when enabled and no custom value", () => {
     const output = generateComposeExport(
