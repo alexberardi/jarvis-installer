@@ -93,7 +93,7 @@ export function generateComposeExport(
 
     lines.push("");
     lines.push("  postgres:");
-    lines.push("    image: postgres:16-alpine");
+    lines.push("    image: pgvector/pgvector:pg16");
     lines.push("    container_name: jarvis-postgres");
     lines.push("    ports:");
     lines.push(`      - "${pgHostPort}:5432"`);

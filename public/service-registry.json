@@ -228,7 +228,7 @@
       "id": "postgres",
       "name": "PostgreSQL",
       "description": "Primary database — stores users, commands, recipes, settings, and service config",
-      "image": "postgres:16-alpine",
+      "image": "pgvector/pgvector:pg16",
       "port": 5432,
       "envVars": [
         { "name": "POSTGRES_USER", "description": "Database superuser", "required": true, "default": "jarvis" },

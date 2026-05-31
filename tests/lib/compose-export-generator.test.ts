@@ -131,8 +131,8 @@ describe("compose-export-generator: release track", () => {
 
   it("does not apply release track to infrastructure images", () => {
     const output = generateComposeExport(makeState({ releaseTrack: "dev" }), registry);
-    expect(output).toContain("postgres:16-alpine");
-    expect(output).not.toMatch(/postgres.*:dev/);
+    expect(output).toContain("pgvector/pgvector:pg16");
+    expect(output).not.toMatch(/pgvector.*:dev/);
   });
 });
 
