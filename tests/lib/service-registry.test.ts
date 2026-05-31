@@ -53,7 +53,7 @@ describe("service-registry", () => {
       const pg = registry.infrastructure.find((i) => i.id === "postgres");
       expect(pg).toBeDefined();
       expect(pg!.name).toBe("PostgreSQL");
-      expect(pg!.image).toContain("postgres");
+      expect(pg!.image).toContain("pgvector/pgvector:pg16");
       expect(pg!.port).toBe(5432);
       expect(pg!.volumes.length).toBeGreaterThan(0);
     });
