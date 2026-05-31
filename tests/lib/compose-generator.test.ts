@@ -39,7 +39,7 @@ describe("compose-generator", () => {
   it("includes postgres infrastructure", () => {
     const output = generateCompose(makeState(), registry);
     expect(output).toContain("postgres:");
-    expect(output).toContain("postgres:16-alpine");
+    expect(output).toContain("pgvector/pgvector:pg16");
   });
 
   it("uses ${VAR} substitution for ports", () => {
@@ -105,8 +105,8 @@ describe("compose-generator", () => {
 
   it("does not use JARVIS_IMAGE_TAG for infrastructure images", () => {
     const output = generateCompose(makeState(), registry);
-    expect(output).toContain("postgres:16-alpine");
-    expect(output).not.toMatch(/postgres.*JARVIS_IMAGE_TAG/);
+    expect(output).toContain("pgvector/pgvector:pg16");
+    expect(output).not.toMatch(/pgvector.*JARVIS_IMAGE_TAG/);
   });
 
   it("includes DATABASE_URL for services with databases", () => {
