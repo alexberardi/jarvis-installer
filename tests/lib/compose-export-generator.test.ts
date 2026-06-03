@@ -160,4 +160,38 @@ describe("compose-export-generator: Jarvis Relay", () => {
     );
     expect(output).not.toContain("JARVIS_RELAY_URL:");
   });
+
+  it("emits RELAY_URL + RELAY_HOUSEHOLD_JWT on jarvis-notifications when enabled", () => {
+    const output = generateComposeExport(
+      makeState({
+        relayEnabled: true,
+        relayUrl: "https://relay.example.com",
+        relayHouseholdJwt: "eyJhbGciOiJIUzI1NiJ9.testtoken",
+        enabledModules: ["jarvis-notifications"],
+      }),
+      registry,
+    );
+    const notifIdx = output.indexOf("jarvis-notifications:");
+    expect(notifIdx).toBeGreaterThan(-1);
+    const nextSvcIdx = output.indexOf("\n  jarvis-", notifIdx + 1);
+    const notifBlock = output.slice(notifIdx, nextSvcIdx === -1 ? undefined : nextSvcIdx);
+    expect(notifBlock).toContain('RELAY_URL: "https://relay.example.com"');
+    expect(notifBlock).toContain('RELAY_HOUSEHOLD_JWT: "eyJhbGciOiJIUzI1NiJ9.testtoken"');
+  });
+
+  it("omits RELAY_URL + RELAY_HOUSEHOLD_JWT on jarvis-notifications when disabled", () => {
+    const output = generateComposeExport(
+      makeState({
+        relayEnabled: false,
+        enabledModules: ["jarvis-notifications"],
+      }),
+      registry,
+    );
+    const notifIdx = output.indexOf("jarvis-notifications:");
+    expect(notifIdx).toBeGreaterThan(-1);
+    const nextSvcIdx = output.indexOf("\n  jarvis-", notifIdx + 1);
+    const notifBlock = output.slice(notifIdx, nextSvcIdx === -1 ? undefined : nextSvcIdx);
+    expect(notifBlock).not.toContain("RELAY_URL:");
+    expect(notifBlock).not.toContain("RELAY_HOUSEHOLD_JWT:");
+  });
 });

@@ -71,6 +71,9 @@ export function generateEnv(state: WizardState, registry: ServiceRegistry): stri
   if (state.relayEnabled) {
     lines.push("# --- Jarvis Relay ---");
     lines.push(`JARVIS_RELAY_URL=${state.relayUrl || "https://relay.jarvisautomation.io"}`);
+    // Household JWT consumed by jarvis-notifications for push delivery.
+    // Empty placeholder on fresh install — user pastes their household JWT.
+    lines.push(`JARVIS_RELAY_HOUSEHOLD_JWT=${state.relayHouseholdJwt ?? ""}`);
     lines.push("");
   }
 

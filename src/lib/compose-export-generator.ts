@@ -395,6 +395,14 @@ function generateExportServiceBlock(
     lines.push(`      JARVIS_RELAY_URL: "${state.relayUrl || 'https://relay.jarvisautomation.io'}"`);
   }
 
+  // Notifications → relay: inject URL + household JWT when relay is enabled.
+  // The notifications Python code reads RELAY_URL / RELAY_HOUSEHOLD_JWT.
+  // Without both, _deliver_via_relay short-circuits and push silently no-ops.
+  if (service.id === "jarvis-notifications" && state.relayEnabled) {
+    lines.push(`      RELAY_URL: "${state.relayUrl || 'https://relay.jarvisautomation.io'}"`);
+    lines.push(`      RELAY_HOUSEHOLD_JWT: "${state.relayHouseholdJwt ?? ''}"`);
+  }
+
   if (
     service.id === "jarvis-command-center" &&
     state.enabledModules.includes("go2rtc")

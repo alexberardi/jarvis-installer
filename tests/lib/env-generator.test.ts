@@ -94,6 +94,37 @@ describe("env-generator", () => {
       );
       expect(env).not.toContain("JARVIS_RELAY_URL=");
     });
+
+    it("emits empty JARVIS_RELAY_HOUSEHOLD_JWT placeholder when enabled and no value", () => {
+      const env = generateEnv(
+        makeState({ relayEnabled: true, relayUrl: "" }),
+        registry,
+      );
+      expect(env).toMatch(/JARVIS_RELAY_HOUSEHOLD_JWT=\s*$/m);
+    });
+
+    it("emits JARVIS_RELAY_HOUSEHOLD_JWT with provided value", () => {
+      const env = generateEnv(
+        makeState({
+          relayEnabled: true,
+          relayUrl: "",
+          relayHouseholdJwt: "eyJhbGciOiJIUzI1NiJ9.testtoken",
+        }),
+        registry,
+      );
+      expect(env).toContain("JARVIS_RELAY_HOUSEHOLD_JWT=eyJhbGciOiJIUzI1NiJ9.testtoken");
+    });
+
+    it("omits JARVIS_RELAY_HOUSEHOLD_JWT entirely when relayEnabled is false", () => {
+      const env = generateEnv(
+        makeState({
+          relayEnabled: false,
+          relayHouseholdJwt: "eyJhbGciOiJIUzI1NiJ9.testtoken",
+        }),
+        registry,
+      );
+      expect(env).not.toContain("JARVIS_RELAY_HOUSEHOLD_JWT");
+    });
   });
 
   describe("Release Track", () => {

@@ -22,6 +22,13 @@ export interface WizardState {
   gpuType: GpuType;
   relayEnabled: boolean;
   relayUrl: string;
+  /**
+   * Household JWT for jarvis-notifications → relay /v1/send. Signed by the
+   * relay's RELAY_JWT_SECRET; carries household_id and an expiry. Without it
+   * the notifications service can't authenticate to the relay and push
+   * delivery silently no-ops.
+   */
+  relayHouseholdJwt?: string;
   releaseTrack: "stable" | "dev";
 }
 
