@@ -215,6 +215,158 @@ describe("compose-generator", () => {
     });
   });
 
+  describe("GPU image variants", () => {
+    it("appends -cuda to llm-proxy image when nvidia GPU is selected", () => {
+      const output = generateCompose(
+        makeState({ gpuType: "nvidia", gpuEnabled: true }),
+        registry,
+      );
+      expect(output).toContain(
+        "image: ghcr.io/alexberardi/jarvis-llm-proxy-api:${JARVIS_IMAGE_TAG:-latest}-cuda",
+      );
+    });
+
+    it("appends -vulkan to llm-proxy image when amd Vulkan is selected", () => {
+      const output = generateCompose(
+        makeState({ gpuType: "amd", gpuEnabled: true }),
+        registry,
+      );
+      expect(output).toContain(
+        "image: ghcr.io/alexberardi/jarvis-llm-proxy-api:${JARVIS_IMAGE_TAG:-latest}-vulkan",
+      );
+    });
+
+    it("appends -rocm to llm-proxy image when amd-rocm is selected", () => {
+      const output = generateCompose(
+        makeState({ gpuType: "amd-rocm", gpuEnabled: true }),
+        registry,
+      );
+      expect(output).toContain(
+        "image: ghcr.io/alexberardi/jarvis-llm-proxy-api:${JARVIS_IMAGE_TAG:-latest}-rocm",
+      );
+    });
+
+    it("appends -cpu to llm-proxy image when no GPU is selected", () => {
+      const output = generateCompose(
+        makeState({ gpuType: "none", gpuEnabled: false }),
+        registry,
+      );
+      expect(output).toContain(
+        "image: ghcr.io/alexberardi/jarvis-llm-proxy-api:${JARVIS_IMAGE_TAG:-latest}-cpu",
+      );
+    });
+
+    it("does not apply variant suffix to non-GPU services", () => {
+      const output = generateCompose(
+        makeState({ gpuType: "nvidia", gpuEnabled: true }),
+        registry,
+      );
+      expect(output).toContain(
+        "image: ghcr.io/alexberardi/jarvis-config-service:${JARVIS_IMAGE_TAG:-latest}",
+      );
+      expect(output).not.toContain(
+        "image: ghcr.io/alexberardi/jarvis-config-service:${JARVIS_IMAGE_TAG:-latest}-cuda",
+      );
+    });
+
+    it("appends -cuda to whisper image when nvidia GPU is selected", () => {
+      const output = generateCompose(
+        makeState({
+          enabledModules: ["jarvis-whisper-api"],
+          gpuType: "nvidia",
+          gpuEnabled: true,
+        }),
+        registry,
+      );
+      expect(output).toContain(
+        "image: ghcr.io/alexberardi/jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-cuda",
+      );
+    });
+
+    it("falls back to plain whisper image for amd Vulkan (no -vulkan whisper build)", () => {
+      const output = generateCompose(
+        makeState({
+          enabledModules: ["jarvis-whisper-api"],
+          gpuType: "amd",
+          gpuEnabled: true,
+        }),
+        registry,
+      );
+      expect(output).toContain(
+        "image: ghcr.io/alexberardi/jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}",
+      );
+      expect(output).not.toContain(
+        "image: ghcr.io/alexberardi/jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-vulkan",
+      );
+    });
+
+    it("appends -rocm to whisper image when amd-rocm is selected", () => {
+      const output = generateCompose(
+        makeState({
+          enabledModules: ["jarvis-whisper-api"],
+          gpuType: "amd-rocm",
+          gpuEnabled: true,
+        }),
+        registry,
+      );
+      expect(output).toContain(
+        "image: ghcr.io/alexberardi/jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-rocm",
+      );
+    });
+
+    it("worker image inherits parent's GPU variant suffix", () => {
+      const output = generateCompose(
+        makeState({ gpuType: "amd", gpuEnabled: true }),
+        registry,
+      );
+      const workerStart = output.indexOf("llm-proxy-worker:");
+      const rest = output.slice(workerStart);
+      expect(rest).toContain(
+        "image: ghcr.io/alexberardi/jarvis-llm-proxy-api:${JARVIS_IMAGE_TAG:-latest}-vulkan",
+      );
+    });
+
+    it("emits nvidia deploy.resources block for nvidia GPU on llm-proxy", () => {
+      const output = generateCompose(
+        makeState({ gpuType: "nvidia", gpuEnabled: true }),
+        registry,
+      );
+      const llmStart = output.indexOf("jarvis-llm-proxy-api:");
+      const rest = output.slice(llmStart);
+      const next = rest.search(/\n  [a-z][a-z0-9-]*:\n/);
+      const block = next > 0 ? rest.slice(0, next) : rest;
+      expect(block).toContain("deploy:");
+      expect(block).toContain("driver: nvidia");
+      expect(block).toContain("capabilities: [gpu]");
+      expect(block).toContain('shm_size: "8gb"');
+    });
+
+    it("emits AMD device passthrough for amd Vulkan on llm-proxy", () => {
+      const output = generateCompose(
+        makeState({ gpuType: "amd", gpuEnabled: true }),
+        registry,
+      );
+      const llmStart = output.indexOf("jarvis-llm-proxy-api:");
+      const rest = output.slice(llmStart);
+      const next = rest.search(/\n  [a-z][a-z0-9-]*:\n/);
+      const block = next > 0 ? rest.slice(0, next) : rest;
+      expect(block).toContain("- /dev/dri:/dev/dri");
+      expect(block).toContain("- /dev/kfd:/dev/kfd");
+      expect(block).toContain("group_add:");
+      expect(block).toContain("- video");
+      expect(block).toContain("- render");
+    });
+
+    it("emits no GPU runtime config when gpuEnabled is false", () => {
+      const output = generateCompose(
+        makeState({ gpuType: "none", gpuEnabled: false }),
+        registry,
+      );
+      expect(output).not.toContain("driver: nvidia");
+      expect(output).not.toContain("- /dev/dri:/dev/dri");
+    });
+  });
+
   describe("worker emission", () => {
     it("emits llm-proxy-worker as a sibling service", () => {
       const output = generateCompose(makeState(), registry);

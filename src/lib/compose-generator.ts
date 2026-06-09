@@ -5,17 +5,70 @@ import { serviceIdToPortVar } from "@/lib/port-utils";
 
 const FIRST_PARTY_PREFIX = "ghcr.io/alexberardi/";
 
+// GPU types we publish image variants for on `cpuFallback` services.
+// Other GPU types (amd Vulkan, none) fall back to the plain CPU image
+// since whisper only ships -cuda / -rocm builds.
+const CPU_FALLBACK_GPU_VARIANTS = new Set<string>(["nvidia", "amd-rocm"]);
+
+function shouldUseGpuVariant(service: ServiceDefinition, gpuType: string): boolean {
+  if (!service.gpu) return false;
+  if (service.cpuFallback && !CPU_FALLBACK_GPU_VARIANTS.has(gpuType)) return false;
+  return true;
+}
+
 /**
  * Resolve the image reference for a first-party Jarvis service.
  * Replaces the hardcoded tag with ${JARVIS_IMAGE_TAG:-latest} so users
- * can switch between stable (:latest) and dev (:dev) tracks via .env.
+ * can switch between stable (:latest) and dev (:dev) tracks via .env,
+ * and appends a GPU variant suffix (-cuda/-vulkan/-rocm/-cpu) for
+ * services that ship variant builds (llm-proxy, whisper).
  * Third-party images (e.g. go2rtc) are returned unchanged.
  */
-function getServiceImage(service: ServiceDefinition): string {
+function getServiceImage(service: ServiceDefinition, state: WizardState): string {
   const image = service.image;
   if (!image.startsWith(FIRST_PARTY_PREFIX)) return image;
   const baseImage = image.includes(":") ? image.slice(0, image.lastIndexOf(":")) : image;
-  return `${baseImage}:\${JARVIS_IMAGE_TAG:-latest}`;
+
+  let gpuSuffix = "";
+  if (shouldUseGpuVariant(service, state.gpuType)) {
+    const variantSuffix: Record<string, string> = {
+      nvidia: "-cuda",
+      amd: "-vulkan",
+      "amd-rocm": "-rocm",
+      none: "-cpu",
+    };
+    gpuSuffix = variantSuffix[state.gpuType] ?? "";
+  }
+
+  return `${baseImage}:\${JARVIS_IMAGE_TAG:-latest}${gpuSuffix}`;
+}
+
+function pushGpuConfig(
+  lines: string[],
+  service: ServiceDefinition,
+  state: WizardState,
+): void {
+  if (!shouldUseGpuVariant(service, state.gpuType) || !state.gpuEnabled) return;
+  if (state.gpuType === "nvidia") {
+    lines.push("    ipc: host");
+    lines.push('    shm_size: "8gb"');
+    lines.push("    deploy:");
+    lines.push("      resources:");
+    lines.push("        reservations:");
+    lines.push("          devices:");
+    lines.push("            - driver: nvidia");
+    lines.push("              count: all");
+    lines.push("              capabilities: [gpu]");
+  } else if (state.gpuType === "amd" || state.gpuType === "amd-rocm") {
+    lines.push("    devices:");
+    lines.push("      - /dev/dri:/dev/dri");
+    lines.push("      - /dev/kfd:/dev/kfd");
+    lines.push("    ipc: host");
+    lines.push('    shm_size: "8gb"');
+    lines.push("    group_add:");
+    lines.push("      - video");
+    lines.push("      - render");
+  }
 }
 
 /**
@@ -81,7 +134,7 @@ export function generateCompose(state: WizardState, registry: ServiceRegistry): 
     if (service.workers) {
       for (const worker of service.workers) {
         lines.push("");
-        lines.push(...generateWorkerBlock(worker, service, registry));
+        lines.push(...generateWorkerBlock(worker, service, state, registry));
       }
     }
   }
@@ -188,7 +241,7 @@ function generateServiceBlock(
   const hostPort = state.portOverrides[service.id] ?? service.port;
 
   lines.push(`  ${service.id}:`);
-  lines.push(`    image: ${getServiceImage(service)}`);
+  lines.push(`    image: ${getServiceImage(service, state)}`);
   lines.push(`    container_name: ${service.id}`);
 
   // Ports
@@ -256,6 +309,9 @@ function generateServiceBlock(
     lines.push("      - command-center-prompt-providers:/app/core/prompt_providers_custom");
   }
 
+  // GPU runtime config (device passthrough, ipc, shm_size) for variant services
+  pushGpuConfig(lines, service, state);
+
   // Healthcheck
   lines.push("    healthcheck:");
   lines.push(`      test: ["CMD", "curl", "-f", "http://localhost:${service.port}${service.healthCheck}"]`);
@@ -273,6 +329,7 @@ function generateServiceBlock(
 function generateWorkerBlock(
   worker: WorkerDefinition,
   parent: ServiceDefinition,
+  state: WizardState,
   registry: ServiceRegistry,
 ): string[] {
   const lines: string[] = [];
@@ -280,7 +337,7 @@ function generateWorkerBlock(
   const overrideKeys = new Set(Object.keys(overrides));
 
   lines.push(`  ${worker.id}:`);
-  lines.push(`    image: ${getServiceImage(parent)}`);
+  lines.push(`    image: ${getServiceImage(parent, state)}`);
   lines.push(`    container_name: ${worker.id}`);
 
   lines.push("    environment:");
@@ -321,6 +378,9 @@ function generateWorkerBlock(
     lines.push(`      ${dep}:`);
     lines.push(`        condition: ${dep === "postgres" ? "service_healthy" : "service_started"}`);
   }
+
+  // Worker inherits parent's GPU runtime config (needed for llm-proxy-worker)
+  pushGpuConfig(lines, parent, state);
 
   lines.push("    networks:");
   lines.push("      - jarvis");
