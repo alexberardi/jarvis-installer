@@ -119,7 +119,7 @@
     {
       "id": "jarvis-tts",
       "name": "Text-to-Speech",
-      "description": "Text-to-speech synthesis via Piper for voice responses",
+      "description": "Text-to-speech synthesis via Piper or Kokoro for voice responses",
       "category": "recommended",
       "port": 7707,
       "image": "ghcr.io/alexberardi/jarvis-tts:latest",
