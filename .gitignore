@@ -5,3 +5,6 @@ dist
 .DS_Store
 coverage
 tsconfig.tsbuildinfo
+
+# Internal product docs — not part of the published tree
+prd/

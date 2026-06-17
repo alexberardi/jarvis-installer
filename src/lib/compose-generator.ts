@@ -5,6 +5,25 @@ import { serviceIdToPortVar } from "@/lib/port-utils";
 
 const FIRST_PARTY_PREFIX = "ghcr.io/alexberardi/";
 
+// Data-plane infrastructure that holds persistent state / secrets and should
+// NOT be reachable from outside the host by default. Their published ports are
+// bound to 127.0.0.1 so they're only accessible to the Docker host (and other
+// containers, which reach them over the internal `jarvis` network regardless of
+// the host binding). Operators who genuinely need to expose these — e.g. a
+// remote DB client — can opt in by setting JARVIS_INFRA_BIND_HOST=0.0.0.0 in
+// their .env. Infra that legitimately serves external clients (mosquitto for
+// remote nodes, grafana/loki dashboards) is intentionally excluded.
+const DATA_PLANE_INFRA = new Set<string>(["postgres", "redis", "minio"]);
+
+/**
+ * Host-side bind prefix for a published port. Data-plane infra defaults to
+ * loopback (127.0.0.1) but stays overridable via ${JARVIS_INFRA_BIND_HOST};
+ * everything else binds on all interfaces (no prefix), matching prior behavior.
+ */
+function infraBindPrefix(infraId: string): string {
+  return DATA_PLANE_INFRA.has(infraId) ? "${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:" : "";
+}
+
 // GPU types we publish image variants for on `cpuFallback` services.
 // Other GPU types (amd Vulkan, none) fall back to the plain CPU image
 // since whisper only ships -cuda / -rocm builds.
@@ -183,8 +202,9 @@ function generateInfraBlock(
   lines.push(`    container_name: jarvis-${infra.id}`);
 
   if (infra.port) {
+    const bindPrefix = infraBindPrefix(infra.id);
     lines.push("    ports:");
-    lines.push(`      - "\${${portVar}:-${hostPort}}:${infra.port}"`);
+    lines.push(`      - "${bindPrefix}\${${portVar}:-${hostPort}}:${infra.port}"`);
   }
 
   // Environment

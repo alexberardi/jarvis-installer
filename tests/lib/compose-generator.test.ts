@@ -80,6 +80,32 @@ describe("compose-generator", () => {
     expect(output).toContain("requirepass");
   });
 
+  describe("data-plane infra host binding", () => {
+    it("binds postgres to loopback by default (overridable via JARVIS_INFRA_BIND_HOST)", () => {
+      const output = generateCompose(makeState(), registry);
+      expect(output).toContain('"${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"');
+    });
+
+    it("binds redis to loopback by default", () => {
+      const output = generateCompose(makeState(), registry);
+      expect(output).toContain('"${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:${REDIS_PORT:-6379}:6379"');
+    });
+
+    it("does not bind application services to loopback (they need external reach)", () => {
+      const output = generateCompose(makeState(), registry);
+      // command-center is the public API surface; its published port must not be
+      // forced onto loopback.
+      expect(output).toContain('"${COMMAND_CENTER_PORT:-7703}:7703"');
+      expect(output).not.toContain("127.0.0.1:${COMMAND_CENTER_PORT");
+    });
+
+    it("does not force mosquitto/loki/grafana onto loopback (external clients)", () => {
+      const output = generateCompose(makeState(), registry);
+      // loki is present (logs service is core). It should bind on all interfaces.
+      expect(output).not.toContain("127.0.0.1:${LOKI_PORT");
+    });
+  });
+
   it("includes postgres init-db.sh volume mount", () => {
     const output = generateCompose(makeState(), registry);
     expect(output).toContain("init-db.sh:/docker-entrypoint-initdb.d/init-db.sh");
