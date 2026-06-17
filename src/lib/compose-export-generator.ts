@@ -96,7 +96,8 @@ export function generateComposeExport(
     lines.push("    image: pgvector/pgvector:pg16");
     lines.push("    container_name: jarvis-postgres");
     lines.push("    ports:");
-    lines.push(`      - "${pgHostPort}:5432"`);
+    // Data-plane infra binds to loopback by default (override via JARVIS_INFRA_BIND_HOST)
+    lines.push(`      - "\${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:${pgHostPort}:5432"`);
     lines.push("    environment:");
     lines.push(`      POSTGRES_USER: "${secrets.dbUser}"`);
     lines.push(`      POSTGRES_PASSWORD: "${secrets.pgPassword}"`);
@@ -137,7 +138,8 @@ export function generateComposeExport(
     lines.push("    image: redis:7-alpine");
     lines.push("    container_name: jarvis-redis");
     lines.push("    ports:");
-    lines.push(`      - "${redisHostPort}:6379"`);
+    // Data-plane infra binds to loopback by default (override via JARVIS_INFRA_BIND_HOST)
+    lines.push(`      - "\${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:${redisHostPort}:6379"`);
     lines.push(`    command: redis-server --requirepass "${secrets.redisPassword}"`);
     lines.push("    volumes:");
     lines.push(`      - ${storagePath}/redis:/data`);
