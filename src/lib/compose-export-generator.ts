@@ -256,6 +256,24 @@ export function generateComposeExport(
   lines.push("  jarvis:");
   lines.push("    driver: bridge");
 
+  // Named volumes. Infra uses bind mounts (${storagePath}/...), so only the
+  // app-level named volumes referenced in service blocks need declaring here —
+  // an undeclared named volume makes the whole compose project invalid.
+  const namedVolumes = new Set<string>();
+  if (allEnabled.some((s) => s.id === "jarvis-whisper-api")) {
+    namedVolumes.add("whisper-voice-profiles");
+  }
+  if (allEnabled.some((s) => s.id === "jarvis-command-center")) {
+    namedVolumes.add("command-center-prompt-providers");
+  }
+  if (namedVolumes.size > 0) {
+    lines.push("");
+    lines.push("volumes:");
+    for (const vol of namedVolumes) {
+      lines.push(`  ${vol}:`);
+    }
+  }
+
   lines.push("");
   return lines.join("\n");
 }

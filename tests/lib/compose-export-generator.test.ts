@@ -195,3 +195,30 @@ describe("compose-export-generator: Jarvis Relay", () => {
     expect(notifBlock).not.toContain("RELAY_HOUSEHOLD_JWT:");
   });
 });
+
+describe("compose-export-generator: top-level named volumes", () => {
+  it("declares whisper-voice-profiles at the top level when whisper is enabled", () => {
+    const output = generateComposeExport(
+      makeState({ enabledModules: ["jarvis-whisper-api"] }),
+      registry,
+    );
+    // service references the named volume...
+    expect(output).toContain("- whisper-voice-profiles:/app/voice_profiles");
+    // ...so it MUST be declared in a top-level volumes: section, or compose is invalid
+    const topLevelVolumesIdx = output.indexOf("\nvolumes:\n");
+    expect(topLevelVolumesIdx).toBeGreaterThan(-1);
+    const volumesBlock = output.slice(topLevelVolumesIdx);
+    expect(volumesBlock).toContain("whisper-voice-profiles:");
+  });
+
+  it("declares command-center-prompt-providers at the top level when CC is enabled", () => {
+    const output = generateComposeExport(
+      makeState({ enabledModules: ["jarvis-command-center"] }),
+      registry,
+    );
+    const topLevelVolumesIdx = output.indexOf("\nvolumes:\n");
+    expect(topLevelVolumesIdx).toBeGreaterThan(-1);
+    const volumesBlock = output.slice(topLevelVolumesIdx);
+    expect(volumesBlock).toContain("command-center-prompt-providers:");
+  });
+});
