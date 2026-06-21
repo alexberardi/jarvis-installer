@@ -541,17 +541,23 @@ function generateExportServiceBlock(
 
   pushExportGpuConfig(lines, service, state);
 
-  // Healthcheck
+  // Healthcheck. Pick a probe that exists in the service's own image:
+  //  - command-center: Python image, no curl → urllib
+  //  - admin / web: Node images, no curl → node http.get (a curl healthcheck
+  //    here marks the container "unhealthy" forever even though it's serving)
+  //  - everything else: curl (present in the Python/uvicorn service images)
   lines.push("    healthcheck:");
+  const healthUrl = `http://localhost:${containerPort}${service.healthCheck}`;
   if (service.id === "jarvis-command-center") {
-    // CC image doesn't include curl — use python urllib
     lines.push(
-      `      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${containerPort}${service.healthCheck}')"]`,
+      `      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('${healthUrl}')"]`,
+    );
+  } else if (service.id === "jarvis-admin" || service.id === "jarvis-web") {
+    lines.push(
+      `      test: ["CMD", "node", "-e", "require('http').get('${healthUrl}', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]`,
     );
   } else {
-    lines.push(
-      `      test: ["CMD", "curl", "-f", "http://localhost:${containerPort}${service.healthCheck}"]`,
-    );
+    lines.push(`      test: ["CMD", "curl", "-f", "${healthUrl}"]`);
   }
   lines.push("      interval: 30s");
   lines.push("      timeout: 10s");

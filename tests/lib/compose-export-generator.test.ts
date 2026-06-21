@@ -222,3 +222,32 @@ describe("compose-export-generator: top-level named volumes", () => {
     expect(volumesBlock).toContain("command-center-prompt-providers:");
   });
 });
+
+describe("compose-export-generator: healthcheck probe per image", () => {
+  // Grab a single service's YAML block, anchored on its "  <id>:" header (so we
+  // don't accidentally match the id inside another service's env URL).
+  const serviceBlock = (output: string, id: string): string => {
+    const start = output.indexOf(`\n  ${id}:\n`);
+    if (start < 0) throw new Error(`service ${id} not found`);
+    const rest = output.slice(start + 1);
+    const end = rest.search(/\n  [a-z][a-z0-9-]*:\n/);
+    return end > 0 ? rest.slice(0, end) : rest;
+  };
+
+  it("uses a node http probe for admin and web (Node images lack curl)", () => {
+    const output = generateComposeExport(
+      makeState({ enabledModules: ["jarvis-admin", "jarvis-web"] }),
+      registry,
+    );
+    // admin/web must NOT use curl — that marks the container unhealthy forever
+    const adminBlock = serviceBlock(output, "jarvis-admin");
+    expect(adminBlock).toContain('"node", "-e"');
+    expect(adminBlock).not.toMatch(/test:.*"curl"/);
+    expect(serviceBlock(output, "jarvis-web")).toContain('"node", "-e"');
+  });
+
+  it("keeps curl for python service images (e.g. auth)", () => {
+    const output = generateComposeExport(makeState(), registry);
+    expect(serviceBlock(output, "jarvis-auth")).toMatch(/test:.*"curl", "-f"/);
+  });
+});
