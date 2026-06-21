@@ -272,5 +272,6 @@ describe("compose-export-generator: command-center auth secret", () => {
     const ccBlock = end > 0 ? rest.slice(0, end) : rest;
     expect(ccBlock).toContain("JARVIS_AUTH_SECRET_KEY:");
     expect(ccBlock).toContain('JARVIS_AUTH_ALGORITHM: "HS256"');
+    expect(ccBlock).toContain('JARVIS_MQTT_BROKER_URL: "mqtt://jarvis-mosquitto:1883"');
   });
 });

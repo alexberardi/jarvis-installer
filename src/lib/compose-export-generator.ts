@@ -413,6 +413,11 @@ function generateExportServiceBlock(
     // settings writes) 500s with "JARVIS_AUTH_SECRET_KEY not configured".
     lines.push(`      JARVIS_AUTH_SECRET_KEY: "${secrets.authSecretKey}"`);
     lines.push('      JARVIS_AUTH_ALGORITHM: "HS256"');
+    // CC publishes to nodes over MQTT (K2 provision, settings push, tool
+    // dispatch, package install). Without the broker URL it defaults to
+    // localhost:1883 inside its own container and every publish 503s
+    // ("MQTT not available"). Point it at the mosquitto container.
+    lines.push('      JARVIS_MQTT_BROKER_URL: "mqtt://jarvis-mosquitto:1883"');
   }
 
   if (service.id === "jarvis-command-center" && state.llmInterface) {
