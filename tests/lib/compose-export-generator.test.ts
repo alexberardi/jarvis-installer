@@ -246,8 +246,19 @@ describe("compose-export-generator: healthcheck probe per image", () => {
     expect(serviceBlock(output, "jarvis-web")).toContain('"node", "-e"');
   });
 
-  it("keeps curl for python service images (e.g. auth)", () => {
-    const output = generateComposeExport(makeState(), registry);
-    expect(serviceBlock(output, "jarvis-auth")).toMatch(/test:.*"curl", "-f"/);
+  it("uses python urllib for python service images, never curl (not installed)", () => {
+    const output = generateComposeExport(
+      makeState({
+        enabledModules: ["jarvis-whisper-api", "jarvis-tts", "jarvis-notifications"],
+      }),
+      registry,
+    );
+    // curl is absent from several service images → it must never appear
+    expect(output).not.toContain('"curl"');
+    for (const id of ["jarvis-config-service", "jarvis-auth", "jarvis-notifications", "jarvis-tts"]) {
+      expect(serviceBlock(output, id)).toContain(
+        '"python", "-c", "import urllib.request',
+      );
+    }
   });
 });

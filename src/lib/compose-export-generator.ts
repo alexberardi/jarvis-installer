@@ -541,23 +541,23 @@ function generateExportServiceBlock(
 
   pushExportGpuConfig(lines, service, state);
 
-  // Healthcheck. Pick a probe that exists in the service's own image:
-  //  - command-center: Python image, no curl → urllib
-  //  - admin / web: Node images, no curl → node http.get (a curl healthcheck
-  //    here marks the container "unhealthy" forever even though it's serving)
-  //  - everything else: curl (present in the Python/uvicorn service images)
+  // Healthcheck. Pick a probe that's guaranteed to exist in the service's own
+  // image — curl is NOT installed in several service images (config/auth/logs/
+  // tts/notifications), so a curl probe marks them "unhealthy" forever even
+  // while they serve fine.
+  //  - admin / web: Node images → node http.get
+  //  - everything else: Python/uvicorn images → python + urllib (always present,
+  //    since these services boot via python/uvicorn)
   lines.push("    healthcheck:");
   const healthUrl = `http://localhost:${containerPort}${service.healthCheck}`;
-  if (service.id === "jarvis-command-center") {
-    lines.push(
-      `      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('${healthUrl}')"]`,
-    );
-  } else if (service.id === "jarvis-admin" || service.id === "jarvis-web") {
+  if (service.id === "jarvis-admin" || service.id === "jarvis-web") {
     lines.push(
       `      test: ["CMD", "node", "-e", "require('http').get('${healthUrl}', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]`,
     );
   } else {
-    lines.push(`      test: ["CMD", "curl", "-f", "${healthUrl}"]`);
+    lines.push(
+      `      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('${healthUrl}')"]`,
+    );
   }
   lines.push("      interval: 30s");
   lines.push("      timeout: 10s");
