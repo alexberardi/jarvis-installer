@@ -1,0 +1,11 @@
+{
+  "//": "Editor/standalone typecheck for headless Node scripts (scripts/*.mts). Not part of `npm run build` — those scripts run via tsx. Keeps Node globals out of the browser SPA's tsconfig.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["scripts"]
+}
