@@ -262,3 +262,15 @@ describe("compose-export-generator: healthcheck probe per image", () => {
     }
   });
 });
+
+describe("compose-export-generator: command-center auth secret", () => {
+  it("gives command-center JARVIS_AUTH_SECRET_KEY for local user-JWT validation", () => {
+    const output = generateComposeExport(makeState(), registry);
+    const start = output.indexOf("\n  jarvis-command-center:\n");
+    const rest = output.slice(start + 1);
+    const end = rest.search(/\n  [a-z][a-z0-9-]*:\n/);
+    const ccBlock = end > 0 ? rest.slice(0, end) : rest;
+    expect(ccBlock).toContain("JARVIS_AUTH_SECRET_KEY:");
+    expect(ccBlock).toContain('JARVIS_AUTH_ALGORITHM: "HS256"');
+  });
+});

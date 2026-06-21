@@ -407,6 +407,14 @@ function generateExportServiceBlock(
   }
 
   // Service-specific extra env vars
+  if (service.id === "jarvis-command-center") {
+    // CC validates user JWTs locally (verify_user_jwt) with the shared secret.
+    // Without it, every user-authenticated CC endpoint (e.g. node K2 provision,
+    // settings writes) 500s with "JARVIS_AUTH_SECRET_KEY not configured".
+    lines.push(`      JARVIS_AUTH_SECRET_KEY: "${secrets.authSecretKey}"`);
+    lines.push('      JARVIS_AUTH_ALGORITHM: "HS256"');
+  }
+
   if (service.id === "jarvis-command-center" && state.llmInterface) {
     lines.push(`      LLM_INTERFACE_SEED: "${state.llmInterface}"`);
   }
