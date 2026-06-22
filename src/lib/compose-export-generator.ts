@@ -484,7 +484,7 @@ function generateExportServiceBlock(
     lines.push("      - sh");
     lines.push("      - -c");
     lines.push("      - |");
-    for (const line of generateConfigSeedScript(allEnabled, containerPort).split("\n")) {
+    for (const line of generateConfigSeedScript(allEnabled, containerPort, state).split("\n")) {
       lines.push(`        ${line}`);
     }
   } else if (service.id === "jarvis-command-center" || service.id === "jarvis-whisper-api") {
@@ -627,14 +627,22 @@ exec uvicorn jarvis_auth.app.main:app --host 0.0.0.0 --port ${authContainerPort}
 function generateConfigSeedScript(
   allEnabled: ServiceDefinition[],
   configContainerPort: number,
+  state: WizardState,
 ): string {
+  // Each row carries BOTH the internal container coords (host=container name,
+  // port=container port) for direct container-to-container discovery AND the
+  // externally-reachable published coords (external_host=localhost, the
+  // published host port) so an off-docker client (mobile, via ?style=external)
+  // gets a reachable URL. external_host="localhost" is the sentinel the client
+  // rewrites to the host it reached config-service on.
   // Use double quotes for Python strings since outer python -c uses single quotes
   const serviceLines: string[] = [];
   for (const svc of allEnabled) {
     const cPort = getContainerPort(svc);
+    const publishedPort = state.portOverrides[svc.id] ?? svc.port;
     const desc = svc.description.replace(/"/g, '\\"');
     serviceLines.push(
-      `    ("${svc.id}", "${svc.id}", ${cPort}, "http", "${svc.healthCheck}", "${desc}"),`,
+      `    ("${svc.id}", "${svc.id}", ${cPort}, "http", "${svc.healthCheck}", "${desc}", "localhost", ${publishedPort}),`,
     );
   }
 
@@ -646,9 +654,9 @@ db = SessionLocal()
 services = [
 ${serviceLines.join("\n")}
 ]
-for name, host, port, scheme, health, desc in services:
+for name, host, port, scheme, health, desc, ext_host, ext_port in services:
     if not db.query(Service).filter(Service.name == name).first():
-        db.add(Service(name=name, host=host, port=port, scheme=scheme, health_path=health, description=desc))
+        db.add(Service(name=name, host=host, port=port, scheme=scheme, health_path=health, description=desc, external_host=ext_host, external_port=ext_port))
         print(f"Registered service: {name}")
 db.commit()
 db.close()

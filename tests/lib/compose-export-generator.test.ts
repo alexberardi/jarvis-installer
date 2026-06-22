@@ -275,3 +275,14 @@ describe("compose-export-generator: command-center auth secret", () => {
     expect(ccBlock).toContain('JARVIS_MQTT_BROKER_URL: "mqtt://jarvis-mosquitto:1883"');
   });
 });
+
+describe("compose-export-generator: config-service seed external coords", () => {
+  it("registers internal container coords AND external published coords", () => {
+    const output = generateComposeExport(makeState({ enabledModules: ["jarvis-admin"] }), registry);
+    // auth: internal jarvis-auth:8000 (container) + external localhost:7701 (published)
+    expect(output).toContain('("jarvis-auth", "jarvis-auth", 8000, "http", "/health"');
+    expect(output).toMatch(/\("jarvis-auth",.*"localhost", 7701\)/);
+    // the seed must persist the external columns
+    expect(output).toContain("external_host=ext_host, external_port=ext_port");
+  });
+});
