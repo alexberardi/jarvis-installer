@@ -20,11 +20,14 @@
  * Writes the compose to --out and a one-line summary to stderr so stdout can be
  * piped if ever needed.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { generateComposeExport } from "../src/lib/compose-export-generator";
+import { generateCompose, getAllEnabledServices } from "../src/lib/compose-generator";
+import { generateEnv } from "../src/lib/env-generator";
+import { generateInitDbScript } from "../src/lib/init-db-generator";
 import { parseRegistry } from "../src/lib/service-registry";
 import type { GpuType, WizardState } from "../src/types/wizard";
 
@@ -41,6 +44,9 @@ const { values } = parseArgs({
     },
     gpu: { type: "string", default: "none" },
     release: { type: "string", default: "stable" },
+    // "export" = self-contained compose (values inlined). "standard" = the
+    // .env bundle (docker-compose.yml with ${VAR} refs + .env + init-db.sh).
+    mode: { type: "string", default: "export" },
   },
 });
 
@@ -82,8 +88,23 @@ const state: WizardState = {
   releaseTrack: values.release as "stable" | "dev",
 };
 
-const compose = generateComposeExport(state, registry, state.storagePath);
-writeFileSync(values.out!, compose);
-console.error(
-  `[gen-export-compose] wrote ${values.out} — modules=[${state.enabledModules.join(", ")}] gpu=${values.gpu} release=${values.release}`,
-);
+if (values.mode === "standard") {
+  // The downloadable bundle: ${VAR}-templated compose + .env + init-db.sh, all
+  // written next to --out so `docker compose --env-file .env` resolves and the
+  // postgres ./init-db.sh mount exists.
+  state.deploymentTarget = "standard";
+  const outDir = dirname(resolve(values.out!));
+  writeFileSync(values.out!, generateCompose(state, registry));
+  writeFileSync(join(outDir, ".env"), generateEnv(state, registry));
+  const initDb = join(outDir, "init-db.sh");
+  writeFileSync(initDb, generateInitDbScript(getAllEnabledServices(state, registry), "jarvis_config"));
+  chmodSync(initDb, 0o755);
+  console.error(
+    `[gen-export-compose] standard bundle → ${values.out} + .env + init-db.sh (gpu=${values.gpu} release=${values.release})`,
+  );
+} else {
+  writeFileSync(values.out!, generateComposeExport(state, registry, state.storagePath));
+  console.error(
+    `[gen-export-compose] export → ${values.out} — modules=[${state.enabledModules.join(", ")}] gpu=${values.gpu} release=${values.release}`,
+  );
+}
