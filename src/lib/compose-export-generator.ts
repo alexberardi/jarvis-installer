@@ -470,7 +470,24 @@ function generateExportServiceBlock(
     lines.push(`      WHISPER_MODEL: "/whisper-models/ggml-${state.whisperModel}.bin"`);
   }
 
-  // Command with seed scripts
+  // Migration entrypoint wrapper. Services flagged `migrate: true` in the
+  // registry run `alembic upgrade head` before their normal CMD/command. We
+  // override the entrypoint (none of these images set ENTRYPOINT; all use CMD)
+  // with a wrapper that migrates, then `exec "$@"` runs whatever args land —
+  // either the image's own CMD or the explicit `command:` block below. The
+  // "jarvis-migrate" token is the $0 placeholder so the real args go to "$@".
+  if (service.migrate) {
+    lines.push("    entrypoint:");
+    lines.push("      - /bin/sh");
+    lines.push("      - -c");
+    lines.push('      - python -m alembic upgrade head && exec "$@"');
+    lines.push("      - jarvis-migrate");
+  }
+
+  // Command with seed scripts. These become the args the migrate entrypoint
+  // execs AFTER migration, so seeding runs against an up-to-date schema. The
+  // leading `alembic upgrade head` is no longer emitted here — the entrypoint
+  // owns migration now.
   if (service.id === "jarvis-auth") {
     lines.push("    command:");
     lines.push("      - sh");
@@ -487,22 +504,19 @@ function generateExportServiceBlock(
     for (const line of generateConfigSeedScript(allEnabled, containerPort, state).split("\n")) {
       lines.push(`        ${line}`);
     }
-  } else if (service.id === "jarvis-command-center" || service.id === "jarvis-whisper-api") {
-    lines.push("    command:");
-    lines.push("      - sh");
-    lines.push("      - -c");
-    lines.push("      - |");
-    lines.push("        python -m alembic upgrade head");
-    lines.push(`        exec uvicorn app.main:app --host 0.0.0.0 --port ${containerPort}`);
   } else if (service.id === "jarvis-llm-proxy-api") {
+    // llm-proxy has NO image CMD, so it MUST keep a command that starts its two
+    // uvicorn services. The alembic prefix is dropped — the entrypoint migrates.
     lines.push("    command:");
     lines.push("      - sh");
     lines.push("      - -c");
     lines.push("      - |");
-    lines.push("        python -m alembic upgrade head");
     lines.push("        python -m uvicorn services.model_service:app --host 0.0.0.0 --port 7705 &");
     lines.push(`        exec python -m uvicorn main:app --host 0.0.0.0 --port ${containerPort}`);
   }
+  // command-center and whisper drop their explicit command override entirely:
+  // the migrate entrypoint runs first, then `exec "$@"` falls through to the
+  // image's own CMD (uvicorn app.main:app), so no per-service serve duplication.
 
   // Dependencies
   if (service.dependsOn.length > 0) {
@@ -604,8 +618,9 @@ function generateAuthSeedScript(
     );
   }
 
-  return `python -m alembic upgrade head
-python -c '
+  // Migration is handled by the service's migrate entrypoint (registry
+  // `migrate: true`); this seed script runs AFTER it, so the schema exists.
+  return `python -c '
 from jarvis_auth.app.db.session import SessionLocal
 from jarvis_auth.app.db import models
 from datetime import datetime, timezone
@@ -646,8 +661,10 @@ function generateConfigSeedScript(
     );
   }
 
-  return `python -m alembic upgrade head
-python -c '
+  // Migration is handled by the service's migrate entrypoint (registry
+  // `migrate: true`); this seed script runs AFTER it, so the schema (including
+  // the external_host/external_port columns) exists before we INSERT.
+  return `python -c '
 from app.database import SessionLocal
 from app.models import Service
 db = SessionLocal()

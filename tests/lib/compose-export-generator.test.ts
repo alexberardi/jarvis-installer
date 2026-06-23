@@ -285,4 +285,124 @@ describe("compose-export-generator: config-service seed external coords", () => 
     // the seed must persist the external columns
     expect(output).toContain("external_host=ext_host, external_port=ext_port");
   });
+
+  it("config seed still seeds + serves but no longer runs alembic itself (entrypoint owns it)", () => {
+    const output = generateComposeExport(makeState({ enabledModules: ["jarvis-admin"] }), registry);
+    const block = serviceBlock(output, "jarvis-config-service");
+    // seeding + serving still present
+    expect(block).toContain("Registered service:");
+    expect(block).toContain("exec uvicorn app.main:app --host 0.0.0.0 --port 7700");
+    // the leading migrate has been removed from the seed script — alembic now
+    // appears only in the entrypoint wrapper (exactly once)
+    expect(alembicCount(block)).toBe(1);
+  });
+
+  it("auth seed still seeds app clients + serves but no longer runs alembic itself", () => {
+    const output = generateComposeExport(makeState({ enabledModules: ["jarvis-admin"] }), registry);
+    const block = serviceBlock(output, "jarvis-auth");
+    expect(block).toContain("Seeded app client:");
+    expect(block).toContain("exec uvicorn jarvis_auth.app.main:app --host 0.0.0.0 --port 8000");
+    expect(alembicCount(block)).toBe(1);
+  });
+});
+
+// Grab a single service's YAML block, anchored on its "  <id>:" header. Shared
+// helper so the migrate-entrypoint suite can isolate per-service blocks.
+function serviceBlock(output: string, id: string): string {
+  const start = output.indexOf(`\n  ${id}:\n`);
+  if (start < 0) throw new Error(`service ${id} not found`);
+  const rest = output.slice(start + 1);
+  const end = rest.search(/\n  [a-z][a-z0-9-]*:\n/);
+  return end > 0 ? rest.slice(0, end) : rest;
+}
+
+// `alembic upgrade head` must appear in a block EXACTLY ONCE — inside the
+// migrate entrypoint wrapper — and never as a redundant leading line in a
+// `command:`/seed script (the bug we're removing).
+function alembicCount(block: string): number {
+  return block.split("python -m alembic upgrade head").length - 1;
+}
+
+describe("compose-export-generator: migrate entrypoint wrapper", () => {
+  // Every service the registry flags `migrate: true` must boot through the
+  // entrypoint wrapper that runs `alembic upgrade head` then execs the image CMD.
+  // logs/tts are intentionally deferred from the migrate set: their images don't
+  // ship alembic and their prod DBs are un-stamped — they need separate wiring.
+  const MIGRATE_SET = [
+    "jarvis-config-service",
+    "jarvis-auth",
+    "jarvis-command-center",
+    "jarvis-whisper-api",
+    "jarvis-llm-proxy-api",
+    "jarvis-notifications",
+  ];
+
+  // Enable every migrate-set service so each block is present in the output.
+  const fullState = () =>
+    makeState({
+      enabledModules: [
+        "jarvis-logs",
+        "jarvis-whisper-api",
+        "jarvis-tts",
+        "jarvis-llm-proxy-api",
+        "jarvis-notifications",
+      ],
+    });
+
+  it("registry flags exactly the expected migrate set", () => {
+    const flagged = registry.services.filter((s) => s.migrate === true).map((s) => s.id);
+    expect(new Set(flagged)).toEqual(new Set(MIGRATE_SET));
+  });
+
+  it.each(MIGRATE_SET)("emits the migrate entrypoint wrapper for %s", (id) => {
+    const output = generateComposeExport(fullState(), registry);
+    const block = serviceBlock(output, id);
+    expect(block).toContain("    entrypoint:");
+    expect(block).toContain("      - /bin/sh");
+    expect(block).toContain("      - -c");
+    expect(block).toContain('      - python -m alembic upgrade head && exec "$@"');
+    expect(block).toContain("      - jarvis-migrate");
+  });
+
+  it("does NOT emit the migrate entrypoint for non-migrate services (web/admin/settings-server)", () => {
+    const output = generateComposeExport(
+      makeState({ enabledModules: ["jarvis-web", "jarvis-admin", "jarvis-settings-server"] }),
+      registry,
+    );
+    for (const id of ["jarvis-web", "jarvis-admin", "jarvis-settings-server"]) {
+      const block = serviceBlock(output, id);
+      expect(block).not.toContain("entrypoint:");
+      expect(block).not.toContain("alembic upgrade head");
+    }
+  });
+
+  it("command-center drops its command override entirely (image CMD serves after migrate)", () => {
+    const output = generateComposeExport(fullState(), registry);
+    const block = serviceBlock(output, "jarvis-command-center");
+    expect(block).toContain("entrypoint:");
+    // no leftover per-service serve command; alembic only in the entrypoint
+    expect(alembicCount(block)).toBe(1);
+    expect(block).not.toMatch(/\n {4}command:/);
+  });
+
+  it("whisper drops its command override entirely (image CMD serves after migrate)", () => {
+    const output = generateComposeExport(fullState(), registry);
+    const block = serviceBlock(output, "jarvis-whisper-api");
+    expect(block).toContain("entrypoint:");
+    expect(alembicCount(block)).toBe(1);
+    expect(block).not.toMatch(/\n {4}command:/);
+  });
+
+  it("llm-proxy keeps its dual-uvicorn command but drops the alembic prefix", () => {
+    const output = generateComposeExport(fullState(), registry);
+    const block = serviceBlock(output, "jarvis-llm-proxy-api");
+    expect(block).toContain("entrypoint:");
+    // dual-uvicorn command still present (no image CMD to fall through to)
+    expect(block).toContain(
+      "python -m uvicorn services.model_service:app --host 0.0.0.0 --port 7705 &",
+    );
+    expect(block).toContain("exec python -m uvicorn main:app --host 0.0.0.0 --port 7704");
+    // but the leading migrate is gone — alembic appears only in the entrypoint
+    expect(alembicCount(block)).toBe(1);
+  });
 });

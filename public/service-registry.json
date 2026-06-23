@@ -12,6 +12,7 @@
       "dependsOn": ["postgres"],
       "database": "jarvis_config",
       "dbDriverPrefix": "postgresql://",
+      "migrate": true,
       "envVars": [
         { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
         { "name": "MIGRATIONS_DATABASE_URL", "description": "PostgreSQL URL for Alembic migrations", "required": true },
@@ -32,6 +33,7 @@
       "dependsOn": ["postgres", "jarvis-config-service"],
       "database": "jarvis_auth",
       "dbDriverPrefix": "postgresql+psycopg2://",
+      "migrate": true,
       "envVars": [
         { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
         { "name": "AUTH_SECRET_KEY", "description": "JWT signing key", "required": true, "secret": true, "secretRef": "AUTH_SECRET_KEY" },
@@ -65,6 +67,7 @@
       "dependsOn": ["postgres", "jarvis-auth", "jarvis-config-service"],
       "database": "jarvis_command_center",
       "dbDriverPrefix": "postgresql://",
+      "migrate": true,
       "volumes": ["command-center-prompt-providers:/app/core/prompt_providers_custom"],
       "llmInterfaceOptions": [
         { "id": "Qwen25MediumUntrained", "name": "Qwen 2.5 (7B-14B)", "description": "Recommended for Qwen 2.5 models", "default": true },
@@ -103,6 +106,7 @@
       "dependsOn": ["postgres", "jarvis-auth", "jarvis-config-service"],
       "database": "jarvis_whisper",
       "dbDriverPrefix": "postgresql+psycopg2://",
+      "migrate": true,
       "gpu": true,
       "cpuFallback": true,
       "modelOptions": [
@@ -140,6 +144,7 @@
       "dependsOn": ["postgres", "redis", "jarvis-auth", "jarvis-config-service"],
       "database": "jarvis_llm_proxy",
       "dbDriverPrefix": "postgresql+psycopg2://",
+      "migrate": true,
       "gpu": true,
       "modelVolume": true,
       "envVars": [
@@ -169,6 +174,7 @@
       "dependsOn": ["postgres", "jarvis-auth", "jarvis-config-service"],
       "database": "jarvis_notifications",
       "dbDriverPrefix": "postgresql+psycopg2://",
+      "migrate": true,
       "envVars": [
         { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
         { "name": "NOTIFICATIONS_PORT", "description": "Server port", "required": false, "default": "7712" },

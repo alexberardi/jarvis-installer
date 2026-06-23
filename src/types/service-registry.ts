@@ -83,6 +83,12 @@ export interface ServiceDefinition {
   modelVolume?: boolean;
   /** Volume mounts for this service (e.g., Docker socket, host compose dir). */
   volumes?: string[];
+  /**
+   * true = this service has Alembic migrations and must run `alembic upgrade
+   * head` on container startup. The generator wraps the image CMD in an
+   * entrypoint that migrates first, then execs the original CMD.
+   */
+  migrate?: boolean;
   /** Sibling worker containers that share this service's image and most config. */
   workers?: WorkerDefinition[];
 }
