@@ -519,10 +519,16 @@ function generateExportServiceBlock(
     lines.push("      - |");
     lines.push("        python -m uvicorn services.model_service:app --host 0.0.0.0 --port 7705 &");
     lines.push(`        exec python -m uvicorn main:app --host 0.0.0.0 --port ${containerPort}`);
+  } else if (service.migrate) {
+    // Overriding `entrypoint` CLEARS the image's CMD, so a migrate service with
+    // no explicit command would `exec ""` (empty $@) and exit right after
+    // migrating — the container restart-loops with no server. Re-emit the
+    // image's serve command so the migrate entrypoint execs it. These services
+    // (command-center, whisper, notifications) all serve `app.main:app`.
+    lines.push(
+      `    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${containerPort}"]`,
+    );
   }
-  // command-center and whisper drop their explicit command override entirely:
-  // the migrate entrypoint runs first, then `exec "$@"` falls through to the
-  // image's own CMD (uvicorn app.main:app), so no per-service serve duplication.
 
   // Dependencies
   if (service.dependsOn.length > 0) {

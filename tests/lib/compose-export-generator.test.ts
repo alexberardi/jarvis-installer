@@ -464,3 +464,29 @@ describe("compose-export-generator: pinned project name", () => {
     expect(output.indexOf("name: jarvis")).toBeLessThan(output.indexOf("services:"));
   });
 });
+
+describe("compose-export-generator: migrate services keep a serve command", () => {
+  it("re-emits uvicorn command for migrate services with no seed (overriding entrypoint clears image CMD)", () => {
+    const output = generateComposeExport(
+      makeState({ enabledModules: ["jarvis-whisper-api", "jarvis-notifications"] }),
+      registry,
+    );
+    const block = (id: string) => {
+      const s = output.indexOf(`\n  ${id}:\n`)
+      const rest = output.slice(s + 1)
+      const e = rest.search(/\n  [a-z][a-z0-9-]*:\n/)
+      return e > 0 ? rest.slice(0, e) : rest
+    };
+    for (const [id, port] of [
+      ["jarvis-command-center", "8002"],
+      ["jarvis-whisper-api", "7706"],
+      ["jarvis-notifications", "7712"],
+    ] as const) {
+      const b = block(id);
+      // must run the migrate entrypoint AND keep an explicit serve command,
+      // else it migrates then exits (empty exec "$@")
+      expect(b).toContain('python -m alembic upgrade head && exec "$@"');
+      expect(b).toContain(`"uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${port}"`);
+    }
+  });
+});
