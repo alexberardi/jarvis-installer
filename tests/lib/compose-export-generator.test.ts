@@ -518,7 +518,7 @@ describe("compose-export-generator: migrate-entrypoint INVARIANT", () => {
       const end = rest.search(/\n {2}[a-z][a-z0-9-]*:\n/);
       return end > 0 ? rest.slice(0, end) : rest;
     };
-    const headers = [...output.matchAll(/\n {2}([a-z][a-z0-9-]*):\n/g)].map((m) => m[1]);
+    const headers = [...output.matchAll(/\n {2}([a-z][a-z0-9-]*):\n/g)].map((m) => m[1]!);
     const offenders = headers.filter((name) => {
       const b = blockOf(name);
       return b.includes('exec "$@"') && !/\n {4}command:/.test(b);
