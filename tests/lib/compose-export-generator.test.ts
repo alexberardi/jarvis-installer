@@ -376,21 +376,25 @@ describe("compose-export-generator: migrate entrypoint wrapper", () => {
     }
   });
 
-  it("command-center drops its command override entirely (image CMD serves after migrate)", () => {
+  it("command-center keeps an explicit serve command (overriding entrypoint clears image CMD)", () => {
     const output = generateComposeExport(fullState(), registry);
     const block = serviceBlock(output, "jarvis-command-center");
     expect(block).toContain("entrypoint:");
-    // no leftover per-service serve command; alembic only in the entrypoint
+    // alembic only in the entrypoint, not duplicated in the command
     expect(alembicCount(block)).toBe(1);
-    expect(block).not.toMatch(/\n {4}command:/);
+    // MUST re-emit the serve command — without it the migrate entrypoint
+    // execs empty args and the service exits right after migrating.
+    expect(block).toMatch(/\n {4}command:/);
+    expect(block).toContain('"uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002"');
   });
 
-  it("whisper drops its command override entirely (image CMD serves after migrate)", () => {
+  it("whisper keeps an explicit serve command (overriding entrypoint clears image CMD)", () => {
     const output = generateComposeExport(fullState(), registry);
     const block = serviceBlock(output, "jarvis-whisper-api");
     expect(block).toContain("entrypoint:");
     expect(alembicCount(block)).toBe(1);
-    expect(block).not.toMatch(/\n {4}command:/);
+    expect(block).toMatch(/\n {4}command:/);
+    expect(block).toContain('"uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7706"');
   });
 
   it("llm-proxy keeps its dual-uvicorn command but drops the alembic prefix", () => {
