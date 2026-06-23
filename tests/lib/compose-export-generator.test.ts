@@ -455,3 +455,12 @@ describe("compose-export-generator: config-service migrate-before-seed regressio
     expect(seedIdx).toBeLessThan(block.indexOf("exec uvicorn app.main:app --host 0.0.0.0 --port 7700"));
   });
 });
+
+describe("compose-export-generator: pinned project name", () => {
+  it("pins the Compose project name (name: jarvis) above services:", () => {
+    const output = generateComposeExport(makeState({}), registry);
+    expect(output).toContain("name: jarvis");
+    expect(output.indexOf("name: jarvis")).toBeGreaterThanOrEqual(0);
+    expect(output.indexOf("name: jarvis")).toBeLessThan(output.indexOf("services:"));
+  });
+});
