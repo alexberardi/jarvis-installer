@@ -494,3 +494,38 @@ describe("compose-export-generator: migrate services keep a serve command", () =
     }
   });
 });
+
+describe("compose-export-generator: migrate-entrypoint INVARIANT", () => {
+  it("NO service may carry the migrate `exec \"$@\"` entrypoint without a non-empty command", () => {
+    // Overriding `entrypoint` CLEARS the image's CMD. So any service that uses
+    // the migrate wrapper MUST supply its own command, or it execs "" and exits
+    // right after migrating (restart-loop, no server). This is a GENERIC class
+    // invariant — unlike a per-service test, you can't accidentally encode the
+    // bug as expected behavior. It would have caught the CC/whisper/notifications
+    // migrate-exit regression before it shipped.
+    const output = generateComposeExport(
+      makeState({
+        enabledModules: [
+          "jarvis-whisper-api", "jarvis-tts", "jarvis-notifications",
+          "jarvis-web", "jarvis-admin",
+        ],
+      }),
+      registry,
+    );
+    const blockOf = (id: string): string => {
+      const start = output.indexOf(`\n  ${id}:\n`);
+      const rest = output.slice(start + 1);
+      const end = rest.search(/\n {2}[a-z][a-z0-9-]*:\n/);
+      return end > 0 ? rest.slice(0, end) : rest;
+    };
+    const headers = [...output.matchAll(/\n {2}([a-z][a-z0-9-]*):\n/g)].map((m) => m[1]);
+    const offenders = headers.filter((name) => {
+      const b = blockOf(name);
+      return b.includes('exec "$@"') && !/\n {4}command:/.test(b);
+    });
+    expect(
+      offenders,
+      `services with the migrate entrypoint but NO command (they exec "" and exit after migrating): ${offenders.join(", ")}`,
+    ).toEqual([]);
+  });
+});
