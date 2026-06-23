@@ -406,3 +406,52 @@ describe("compose-export-generator: migrate entrypoint wrapper", () => {
     expect(alembicCount(block)).toBe(1);
   });
 });
+
+// Tight regression guard for the EXACT 2026-06 incident: config-service shipped
+// migration 005 (services.external_host) but its compose never ran
+// `alembic upgrade head` on startup, so `/services` 500'd fleet-wide. This block
+// pins config-service's migrate wrapper byte-for-byte and proves the
+// external-coords seed (which reads/writes external_host) can only run AFTER it.
+describe("compose-export-generator: config-service migrate-before-seed regression guard", () => {
+  it("jarvis-config-service emits the alembic-then-exec entrypoint wrapper verbatim", () => {
+    const output = generateComposeExport(makeState({ enabledModules: ["jarvis-admin"] }), registry);
+    const block = serviceBlock(output, "jarvis-config-service");
+    // The wrapper, line for line — not a loose substring. If any line drifts
+    // (or the whole entrypoint is dropped), config-service boots on a stale
+    // schema again and /services 500s.
+    expect(block).toContain(
+      [
+        "    entrypoint:",
+        "      - /bin/sh",
+        "      - -c",
+        '      - python -m alembic upgrade head && exec "$@"',
+        "      - jarvis-migrate",
+      ].join("\n"),
+    );
+  });
+
+  it("registry flags config-service to migrate but NOT the non-DB jarvis-web", () => {
+    const byId = (id: string) => registry.services.find((s) => s.id === id);
+    // config-service owns the schema that broke — it MUST be in the migrate set.
+    expect(byId("jarvis-config-service")?.migrate).toBe(true);
+    // jarvis-web has no database/alembic — flagging it would crash boot on a
+    // missing alembic.ini. Guard against accidental over-flagging.
+    expect(byId("jarvis-web")?.migrate).not.toBe(true);
+  });
+
+  it("runs alembic migrate BEFORE the external-coords seed (seed can't hit a stale schema)", () => {
+    const output = generateComposeExport(makeState({ enabledModules: ["jarvis-admin"] }), registry);
+    const block = serviceBlock(output, "jarvis-config-service");
+    // The migrate entrypoint must appear strictly before the command/seed that
+    // INSERTs external_host/external_port — otherwise seeding runs first and
+    // explodes on the missing column (the original symptom).
+    const entrypointIdx = block.indexOf("    entrypoint:");
+    const seedIdx = block.indexOf("external_host=ext_host, external_port=ext_port");
+    expect(entrypointIdx).toBeGreaterThan(-1);
+    expect(seedIdx).toBeGreaterThan(-1);
+    expect(entrypointIdx).toBeLessThan(seedIdx);
+    // And the seed still serves config-service afterwards (so /services is live
+    // on the migrated schema).
+    expect(seedIdx).toBeLessThan(block.indexOf("exec uvicorn app.main:app --host 0.0.0.0 --port 7700"));
+  });
+});
