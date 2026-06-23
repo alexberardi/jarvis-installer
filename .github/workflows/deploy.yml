@@ -9,6 +9,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  packages: read
 
 concurrency:
   group: pages
@@ -30,8 +31,86 @@ jobs:
         with:
           path: dist
 
+  # Boot-smoke: the deploy gate. Unit tests can't prove the generated artifact
+  # BOOTS (they assert strings, and have historically encoded bugs). So before we
+  # ship the generator to users, generate the real compose-export, actually bring
+  # it up, and run the install-e2e deployment + migrations-ran assertions. If the
+  # generated stack doesn't come up, the GitHub Pages deploy is blocked.
+  boot-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GEN_FILE: umbrella/install-e2e/docker-compose.gen.yaml
+      OVERRIDE_FILE: umbrella/install-e2e/docker-compose.ci-override.yaml
+      COMPOSE_PROJECT: jarvis
+    steps:
+      - name: Checkout installer (the generator under test)
+        uses: actions/checkout@v4
+      - name: Checkout umbrella (install-e2e harness)
+        uses: actions/checkout@v4
+        with:
+          repository: alexberardi/jarvis
+          path: umbrella
+
+      - name: Free up disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android "${AGENT_TOOLSDIRECTORY:-}" || true
+          docker system prune -af || true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Generate the real compose-export from THIS installer commit
+        run: |
+          npm ci
+          npx tsx scripts/gen-export-compose.mts --out "$GITHUB_WORKSPACE/$GEN_FILE" --gpu none
+
+      - name: Validate compose
+        run: docker compose -f "$GEN_FILE" -f "$OVERRIDE_FILE" config -q && echo "compose valid"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull images (with retry)
+        run: |
+          for i in 1 2 3 4; do
+            docker compose -p "$COMPOSE_PROJECT" -f "$GEN_FILE" -f "$OVERRIDE_FILE" pull && break
+            echo "::warning::pull attempt $i failed; retrying in 20s"; sleep 20
+          done
+
+      - name: Bring up the generated stack
+        run: |
+          sudo mkdir -p /var/lib/jarvis && sudo chmod 777 /var/lib/jarvis
+          docker compose -p "$COMPOSE_PROJECT" -f "$GEN_FILE" -f "$OVERRIDE_FILE" up -d
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Assert it actually boots (deployment + migrations-ran)
+        working-directory: umbrella/install-e2e
+        run: |
+          pip install -r requirements.txt
+          pytest test_deployment.py test_migrations.py -v
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          docker compose -p "$COMPOSE_PROJECT" -f "$GEN_FILE" -f "$OVERRIDE_FILE" ps || true
+          docker compose -p "$COMPOSE_PROJECT" -f "$GEN_FILE" -f "$OVERRIDE_FILE" logs --tail 120 || true
+
+      - name: Tear down
+        if: always()
+        run: docker compose -p "$COMPOSE_PROJECT" -f "$GEN_FILE" -f "$OVERRIDE_FILE" down -v || true
+
   deploy:
-    needs: build
+    needs: [build, boot-smoke] # deploy only if the generated stack actually boots
     runs-on: ubuntu-latest
     environment:
       name: github-pages
