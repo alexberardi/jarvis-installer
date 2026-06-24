@@ -529,3 +529,27 @@ describe("compose-export-generator: migrate-entrypoint INVARIANT", () => {
     ).toEqual([]);
   });
 });
+
+describe("compose-export-generator: dockerized URL style + localhost broker", () => {
+  it("emits JARVIS_CONFIG_URL_STYLE=dockerized for jarvis services", () => {
+    const output = generateComposeExport(makeState({ enabledModules: ["jarvis-whisper-api", "jarvis-notifications"] }), registry);
+    // every jarvis service block that talks to config-service gets the style
+    expect(output).toContain('JARVIS_CONFIG_URL_STYLE: "dockerized"');
+    const block = (id: string) => {
+      const s = output.indexOf(`\n  ${id}:\n`);
+      const rest = output.slice(s + 1);
+      const e = rest.search(/\n {2}[a-z][a-z0-9-]*:\n/);
+      return e > 0 ? rest.slice(0, e) : rest;
+    };
+    for (const id of ["jarvis-command-center", "jarvis-auth", "jarvis-config-service"]) {
+      expect(block(id), `${id} missing dockerized style`).toContain('JARVIS_CONFIG_URL_STYLE: "dockerized"');
+    }
+  });
+
+  it("seeds the MQTT broker as localhost (NOT host.docker.internal — remote nodes can't resolve that)", () => {
+    const output = generateComposeExport(makeState({}), registry);
+    // registered as localhost so it resolves per-consumer (dockerized→host.docker.internal, remote→server IP)
+    expect(output).toContain('("jarvis-mqtt-broker", "localhost", 1884, "mqtt"');
+    expect(output).not.toContain('"jarvis-mqtt-broker", "host.docker.internal"');
+  });
+});

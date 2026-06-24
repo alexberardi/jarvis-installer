@@ -378,6 +378,16 @@ function generateExportServiceBlock(
   // Environment
   lines.push("    environment:");
 
+  // Discovery URL style. In a compose deployment, in-container services reach
+  // shared infra registered as `localhost` (e.g. the MQTT broker) via the host —
+  // `dockerized` makes config-service rewrite localhost → host.docker.internal
+  // (reachable through the extra_hosts host-gateway + the published port). It only
+  // rewrites localhost entries; container-name entries stay on the bridge. This is
+  // what lets ONE broker registry entry (localhost) resolve for both in-Docker
+  // services (→ host.docker.internal) and remote Pi nodes (→ server IP via remote
+  // style). Without it, a localhost broker entry would point a container at itself.
+  lines.push('      JARVIS_CONFIG_URL_STYLE: "dockerized"');
+
   // DATABASE_URL
   if (service.database) {
     const driver = service.dbDriverPrefix ?? "postgresql://";
@@ -672,6 +682,15 @@ function generateConfigSeedScript(
       `    ("${svc.id}", "${svc.id}", ${cPort}, "http", "${svc.healthCheck}", "${desc}", "localhost", ${publishedPort}),`,
     );
   }
+
+  // MQTT broker — registered as the neutral `localhost` (NOT host.docker.internal,
+  // which a remote Pi node cannot resolve). With this, the single entry resolves
+  // per-consumer: in-Docker services (dockerized style) → host.docker.internal,
+  // remote nodes (remote style) → the server IP. Both land on the published port.
+  const mqttPublishedPort = state.infraPortOverrides["mosquitto"] ?? 1884;
+  serviceLines.push(
+    `    ("jarvis-mqtt-broker", "localhost", ${mqttPublishedPort}, "mqtt", "", "MQTT message broker (Mosquitto)", "localhost", ${mqttPublishedPort}),`,
+  );
 
   // Migration is handled by the service's migrate entrypoint (registry
   // `migrate: true`); this seed script runs AFTER it, so the schema (including
