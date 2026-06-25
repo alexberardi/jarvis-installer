@@ -38,7 +38,8 @@
         { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
         { "name": "AUTH_SECRET_KEY", "description": "JWT signing key", "required": true, "secret": true, "secretRef": "AUTH_SECRET_KEY" },
         { "name": "JARVIS_AUTH_ADMIN_TOKEN", "description": "Admin token for auth endpoints", "required": true, "secret": true, "secretRef": "JARVIS_AUTH_ADMIN_TOKEN" },
-        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:7700" }
+        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:7700" },
+        { "name": "REFRESH_TOKEN_GRACE_SECONDS", "description": "Grace window (seconds) before a reused refresh token triggers family revocation. Default 10 suits single-device installs; raise for slow-network/multi-client.", "required": false, "default": "10" }
       ]
     },
     {
