@@ -188,4 +188,34 @@ describe("service-registry", () => {
       expect(infra).toEqual([]);
     });
   });
+
+  describe("REFRESH_TOKEN_GRACE_SECONDS env var (#44)", () => {
+    it("exposes REFRESH_TOKEN_GRACE_SECONDS in the jarvis-auth envVars", () => {
+      const registry = parseRegistry(registryJson);
+      const auth = registry.services.find((s) => s.id === "jarvis-auth");
+      expect(auth).toBeDefined();
+      const grace = auth!.envVars.find((v) => v.name === "REFRESH_TOKEN_GRACE_SECONDS");
+      expect(grace).toBeDefined();
+      expect(grace!.required).toBe(false);
+      expect(grace!.default).toBe("10");
+      expect(grace!.description.length).toBeGreaterThan(0);
+    });
+
+    it("still round-trips cleanly with the added entry", () => {
+      const registry = parseRegistry(registryJson);
+      const auth = registry.services.find((s) => s.id === "jarvis-auth");
+      // Original 4 vars + the new one.
+      expect(auth!.envVars.length).toBe(5);
+      const names = auth!.envVars.map((v) => v.name);
+      expect(names).toContain("DATABASE_URL");
+      expect(names).toContain("AUTH_SECRET_KEY");
+      expect(names).toContain("JARVIS_AUTH_ADMIN_TOKEN");
+      expect(names).toContain("JARVIS_CONFIG_URL");
+      expect(names).toContain("REFRESH_TOKEN_GRACE_SECONDS");
+      // Serialization is stable: a parse of the re-serialized registry matches.
+      const reparsed = parseRegistry(JSON.parse(JSON.stringify(registryJson)));
+      const reAuth = reparsed.services.find((s) => s.id === "jarvis-auth");
+      expect(reAuth!.envVars.length).toBe(auth!.envVars.length);
+    });
+  });
 });
