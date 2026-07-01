@@ -15,6 +15,7 @@ export const SECRET_KEYS = [
   "POSTGRES_PASSWORD",
   "REDIS_PASSWORD",
   "ADMIN_API_KEY",
+  "GRAFANA_ADMIN_PASSWORD",
 ] as const;
 
 export type SecretKey = (typeof SECRET_KEYS)[number];

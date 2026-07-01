@@ -64,6 +64,7 @@ describe("secret-generator", () => {
       expect(SECRET_KEYS).toContain("POSTGRES_PASSWORD");
       expect(SECRET_KEYS).toContain("REDIS_PASSWORD");
       expect(SECRET_KEYS).toContain("ADMIN_API_KEY");
+      expect(SECRET_KEYS).toContain("GRAFANA_ADMIN_PASSWORD");
     });
   });
 });

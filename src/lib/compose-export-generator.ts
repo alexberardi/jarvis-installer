@@ -27,6 +27,7 @@ interface SecretsMap {
   configAdminToken: string;
   authAdminToken: string;
   adminApiKey: string;
+  grafanaPassword: string;
   dbUser: string;
 }
 
@@ -63,6 +64,7 @@ export function generateComposeExport(
     configAdminToken: state.secrets["JARVIS_CONFIG_ADMIN_TOKEN"] ?? "changeme",
     authAdminToken: state.secrets["JARVIS_AUTH_ADMIN_TOKEN"] ?? "changeme",
     adminApiKey: state.secrets["ADMIN_API_KEY"] ?? "changeme",
+    grafanaPassword: state.secrets["GRAFANA_ADMIN_PASSWORD"] ?? "changeme",
     dbUser: state.dbUser || "jarvis",
   };
 
@@ -182,7 +184,7 @@ export function generateComposeExport(
     lines.push("    ports:");
     lines.push(`      - "${grafanaHostPort}:3000"`);
     lines.push("    environment:");
-    lines.push('      GF_SECURITY_ADMIN_PASSWORD: "jarvis"');
+    lines.push(`      GF_SECURITY_ADMIN_PASSWORD: "${secrets.grafanaPassword}"`);
     lines.push("    volumes:");
     lines.push(`      - ${storagePath}/grafana:/var/lib/grafana`);
     lines.push("    networks:");
