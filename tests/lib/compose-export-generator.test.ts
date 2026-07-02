@@ -530,6 +530,59 @@ describe("compose-export-generator: migrate-entrypoint INVARIANT", () => {
   });
 });
 
+describe("compose-export-generator: llm-proxy MODEL_SERVICE_TOKEN + AMD flash-attn", () => {
+  const tokenOf = (output: string, id: string): string => {
+    const match = serviceBlock(output, id).match(/MODEL_SERVICE_TOKEN: "([^"]*)"/);
+    if (!match) throw new Error(`MODEL_SERVICE_TOKEN not found in ${id} block`);
+    return match[1]!;
+  };
+
+  it("inlines MODEL_SERVICE_TOKEN with an IDENTICAL value in the API and worker blocks", () => {
+    const output = generateComposeExport(makeState(), registry);
+    // Model service fails closed since llm-proxy 55d2431: unset token = 503 on
+    // every inference call while /health stays green. The worker calls the model
+    // service on 7705, so both containers MUST carry the same value.
+    const apiToken = tokenOf(output, "jarvis-llm-proxy-api");
+    const workerToken = tokenOf(output, "llm-proxy-worker");
+    expect(apiToken).toBe("9".repeat(64));
+    expect(workerToken).toBe(apiToken);
+  });
+
+  it("token is non-empty", () => {
+    const output = generateComposeExport(makeState(), registry);
+    expect(tokenOf(output, "jarvis-llm-proxy-api").length).toBeGreaterThan(0);
+  });
+
+  it.each(["amd", "amd-rocm"] as const)(
+    "emits JARVIS_FLASH_ATTN=false on API + worker for %s GPUs",
+    (gpuType) => {
+      const output = generateComposeExport(makeState({ gpuType, gpuEnabled: true }), registry);
+      expect(serviceBlock(output, "jarvis-llm-proxy-api")).toContain(
+        'JARVIS_FLASH_ATTN: "false"',
+      );
+      expect(serviceBlock(output, "llm-proxy-worker")).toContain(
+        'JARVIS_FLASH_ATTN: "false"',
+      );
+    },
+  );
+
+  it("does NOT emit JARVIS_FLASH_ATTN for nvidia (definition default true is correct)", () => {
+    const output = generateComposeExport(
+      makeState({ gpuType: "nvidia", gpuEnabled: true }),
+      registry,
+    );
+    expect(output).not.toContain("JARVIS_FLASH_ATTN");
+  });
+
+  it("does NOT emit JARVIS_FLASH_ATTN for cpu-only installs", () => {
+    const output = generateComposeExport(
+      makeState({ gpuType: "none", gpuEnabled: false }),
+      registry,
+    );
+    expect(output).not.toContain("JARVIS_FLASH_ATTN");
+  });
+});
+
 describe("compose-export-generator: dockerized URL style + localhost broker", () => {
   it("emits JARVIS_CONFIG_URL_STYLE=dockerized for jarvis services", () => {
     const output = generateComposeExport(makeState({ enabledModules: ["jarvis-whisper-api", "jarvis-notifications"] }), registry);

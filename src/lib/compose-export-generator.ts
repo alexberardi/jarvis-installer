@@ -28,6 +28,7 @@ interface SecretsMap {
   authAdminToken: string;
   adminApiKey: string;
   grafanaPassword: string;
+  modelServiceToken: string;
   dbUser: string;
 }
 
@@ -65,6 +66,7 @@ export function generateComposeExport(
     authAdminToken: state.secrets["JARVIS_AUTH_ADMIN_TOKEN"] ?? "changeme",
     adminApiKey: state.secrets["ADMIN_API_KEY"] ?? "changeme",
     grafanaPassword: state.secrets["GRAFANA_ADMIN_PASSWORD"] ?? "changeme",
+    modelServiceToken: state.secrets["MODEL_SERVICE_TOKEN"] ?? "changeme",
     dbUser: state.dbUser || "jarvis",
   };
 
@@ -354,6 +356,25 @@ function pushExportGpuConfig(
   }
 }
 
+/**
+ * Env shared by the llm-proxy API container and its queue worker. Both MUST
+ * carry the SAME MODEL_SERVICE_TOKEN: the worker authenticates its calls to
+ * the model service (port 7705) with it, and the model service fails closed —
+ * every inference call 503s (with /health still green) when the token is unset.
+ */
+function pushLlmProxySharedEnv(
+  lines: string[],
+  state: WizardState,
+  secrets: SecretsMap,
+): void {
+  lines.push("      # Model service (7705) internal auth — it rejects all inference calls with 503 when unset");
+  lines.push(`      MODEL_SERVICE_TOKEN: "${secrets.modelServiceToken}"`);
+  if (state.gpuType === "amd" || state.gpuType === "amd-rocm") {
+    lines.push("      # Flash attention's HIP kernel faults natively on RDNA4 (gfx1201); false is also faster there");
+    lines.push('      JARVIS_FLASH_ATTN: "false"');
+  }
+}
+
 function generateExportServiceBlock(
   service: ServiceDefinition,
   state: WizardState,
@@ -470,6 +491,7 @@ function generateExportServiceBlock(
     lines.push('      JARVIS_MODEL_CHAT_FORMAT: "chatml"');
     lines.push('      JARVIS_MODEL_CONTEXT_WINDOW: "32768"');
     lines.push(`      REDIS_URL: "redis://:${secrets.redisPassword}@redis:6379/0"`);
+    pushLlmProxySharedEnv(lines, state, secrets);
   }
 
   if (service.id === "jarvis-settings-server") {
@@ -791,6 +813,7 @@ function generateExportWorkerBlock(
     for (const [key, val] of llmProxyEnv) {
       if (!overrideKeys.has(key)) lines.push(`      ${key}: ${val}`);
     }
+    pushLlmProxySharedEnv(lines, state, secrets);
   }
 
   for (const [key, val] of Object.entries(overrides)) {

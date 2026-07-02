@@ -28,6 +28,7 @@ describe("env-generator", () => {
     expect(env).toContain("AUTH_SECRET_KEY=" + "a".repeat(64));
     expect(env).toContain("POSTGRES_PASSWORD=" + "e".repeat(32));
     expect(env).toContain("REDIS_PASSWORD=" + "f".repeat(32));
+    expect(env).toContain("MODEL_SERVICE_TOKEN=" + "9".repeat(64));
   });
 
   it("includes DB_USER", () => {

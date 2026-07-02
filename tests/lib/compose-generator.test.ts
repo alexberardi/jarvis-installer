@@ -393,6 +393,60 @@ describe("compose-generator", () => {
     });
   });
 
+  describe("llm-proxy MODEL_SERVICE_TOKEN + AMD flash-attn", () => {
+    // Grab a single service's YAML block, anchored on its "  <id>:" header.
+    const serviceBlock = (output: string, id: string): string => {
+      const start = output.indexOf(`\n  ${id}:\n`);
+      if (start < 0) throw new Error(`service ${id} not found`);
+      const rest = output.slice(start + 1);
+      const end = rest.search(/\n  [a-z][a-z0-9-]*:\n/);
+      return end > 0 ? rest.slice(0, end) : rest;
+    };
+
+    it("emits MODEL_SERVICE_TOKEN (same .env var) in BOTH the API and worker blocks", () => {
+      const output = generateCompose(makeState(), registry);
+      // The worker authenticates to the model service (7705) with this token;
+      // the model service fails closed (503 on all inference) when it's unset,
+      // so BOTH containers must resolve the SAME value.
+      expect(serviceBlock(output, "jarvis-llm-proxy-api")).toContain(
+        "MODEL_SERVICE_TOKEN: ${MODEL_SERVICE_TOKEN}",
+      );
+      expect(serviceBlock(output, "llm-proxy-worker")).toContain(
+        "MODEL_SERVICE_TOKEN: ${MODEL_SERVICE_TOKEN}",
+      );
+    });
+
+    it("does not leak MODEL_SERVICE_TOKEN into other service blocks", () => {
+      const output = generateCompose(makeState(), registry);
+      expect(serviceBlock(output, "jarvis-command-center")).not.toContain(
+        "MODEL_SERVICE_TOKEN",
+      );
+    });
+
+    it.each(["amd", "amd-rocm"] as const)(
+      "emits JARVIS_FLASH_ATTN=false on API + worker for %s GPUs",
+      (gpuType) => {
+        const output = generateCompose(makeState({ gpuType, gpuEnabled: true }), registry);
+        expect(serviceBlock(output, "jarvis-llm-proxy-api")).toContain(
+          'JARVIS_FLASH_ATTN: "false"',
+        );
+        expect(serviceBlock(output, "llm-proxy-worker")).toContain(
+          'JARVIS_FLASH_ATTN: "false"',
+        );
+      },
+    );
+
+    it("does NOT emit JARVIS_FLASH_ATTN for nvidia (definition default true is correct)", () => {
+      const output = generateCompose(makeState({ gpuType: "nvidia", gpuEnabled: true }), registry);
+      expect(output).not.toContain("JARVIS_FLASH_ATTN");
+    });
+
+    it("does NOT emit JARVIS_FLASH_ATTN for cpu-only installs", () => {
+      const output = generateCompose(makeState({ gpuType: "none", gpuEnabled: false }), registry);
+      expect(output).not.toContain("JARVIS_FLASH_ATTN");
+    });
+  });
+
   describe("worker emission", () => {
     it("emits llm-proxy-worker as a sibling service", () => {
       const output = generateCompose(makeState(), registry);
