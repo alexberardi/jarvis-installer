@@ -295,49 +295,40 @@ describe("compose-generator", () => {
       );
     });
 
-    it("appends -cuda to whisper image when nvidia GPU is selected", () => {
+    // Whisper's variant is driven by whisperBackend (default cpu), NOT the LLM gpuType.
+    it("whisper cpu (default): plain image, independent of the LLM gpuType", () => {
       const output = generateCompose(
-        makeState({
-          enabledModules: ["jarvis-whisper-api"],
-          gpuType: "nvidia",
-          gpuEnabled: true,
-        }),
+        makeState({ enabledModules: ["jarvis-whisper-api"], gpuType: "amd", gpuEnabled: true, whisperBackend: "cpu" }),
         registry,
       );
-      expect(output).toContain(
-        "image: ghcr.io/alexberardi/jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-cuda",
-      );
+      expect(output).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}");
+      expect(output).not.toContain("jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-cuda");
+      expect(output).not.toContain("jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-vulkan");
+      expect(output).not.toContain("jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-rocm");
     });
 
-    it("falls back to plain whisper image for amd Vulkan (no -vulkan whisper build)", () => {
+    it("whisper cuda: -cuda image", () => {
       const output = generateCompose(
-        makeState({
-          enabledModules: ["jarvis-whisper-api"],
-          gpuType: "amd",
-          gpuEnabled: true,
-        }),
+        makeState({ enabledModules: ["jarvis-whisper-api"], whisperBackend: "cuda" }),
         registry,
       );
-      expect(output).toContain(
-        "image: ghcr.io/alexberardi/jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}",
-      );
-      expect(output).not.toContain(
-        "image: ghcr.io/alexberardi/jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-vulkan",
-      );
+      expect(output).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-cuda");
     });
 
-    it("appends -rocm to whisper image when amd-rocm is selected", () => {
+    it("whisper vulkan: -vulkan image", () => {
       const output = generateCompose(
-        makeState({
-          enabledModules: ["jarvis-whisper-api"],
-          gpuType: "amd-rocm",
-          gpuEnabled: true,
-        }),
+        makeState({ enabledModules: ["jarvis-whisper-api"], whisperBackend: "vulkan" }),
         registry,
       );
-      expect(output).toContain(
-        "image: ghcr.io/alexberardi/jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-rocm",
+      expect(output).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-vulkan");
+    });
+
+    it("whisper rocm: -rocm image", () => {
+      const output = generateCompose(
+        makeState({ enabledModules: ["jarvis-whisper-api"], whisperBackend: "rocm" }),
+        registry,
       );
+      expect(output).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-rocm");
     });
 
     it("worker image inherits parent's GPU variant suffix", () => {
