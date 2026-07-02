@@ -77,6 +77,7 @@ const state: WizardState = {
   },
   dbUser: "jarvis",
   whisperModel: "base.en",
+  whisperBackend: "cpu",
   // The behavior lane drives CC's real native-tool provider against a cloud model.
   llmInterface: "ChatGPTOpenAI",
   deploymentTarget: "compose-export",

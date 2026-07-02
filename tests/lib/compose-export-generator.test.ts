@@ -67,43 +67,66 @@ describe("compose-export-generator: worker emission", () => {
   });
 });
 
-describe("compose-export-generator: cpuFallback (whisper)", () => {
-  function whisperState(gpuType: "nvidia" | "amd" | "amd-rocm" | "none", gpuEnabled = true) {
-    return makeState({ gpuEnabled, gpuType, enabledModules: ["jarvis-whisper-api"] });
+describe("compose-export-generator: whisper backend selection", () => {
+  // Whisper's variant is chosen EXPLICITLY via whisperBackend (default cpu),
+  // independent of the auto-detected LLM gpuType.
+  function whisperState(whisperBackend: "cpu" | "cuda" | "vulkan" | "rocm") {
+    return makeState({ whisperBackend, enabledModules: ["jarvis-whisper-api"] });
+  }
+  function whisperBlock(output: string): string {
+    const start = output.search(/\n {2}jarvis-whisper-api:\n/);
+    const block = output.slice(start + 1);
+    const end = block.slice(1).search(/\n {2}[a-z][a-z0-9-]*:\n/);
+    return end > 0 ? block.slice(0, end + 1) : block;
   }
 
-  it("uses -cuda variant on NVIDIA hosts", () => {
-    const output = generateComposeExport(whisperState("nvidia"), registry);
-    expect(output).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest-cuda");
+  it("cpu (default): plain image, no GPU passthrough", () => {
+    const w = whisperBlock(generateComposeExport(whisperState("cpu"), registry));
+    expect(w).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest");
+    expect(w).not.toContain("-vulkan");
+    expect(w).not.toContain("-cuda");
+    expect(w).not.toContain("/dev/dri");
+    expect(w).not.toContain("driver: nvidia");
   });
 
-  it("uses -rocm variant on AMD ROCm hosts", () => {
-    const output = generateComposeExport(whisperState("amd-rocm"), registry);
-    expect(output).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest-rocm");
+  it("vulkan: -vulkan image + /dev/dri + render group", () => {
+    const w = whisperBlock(generateComposeExport(whisperState("vulkan"), registry));
+    expect(w).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest-vulkan");
+    expect(w).toContain("/dev/dri:/dev/dri");
+    expect(w).toContain("- render");
   });
 
-  it("falls back to plain CPU image on AMD Vulkan hosts (no -vulkan tag published)", () => {
-    const output = generateComposeExport(whisperState("amd"), registry);
-    const blockStart = output.search(/\n {2}jarvis-whisper-api:\n/);
-    const block = output.slice(blockStart + 1);
-    const blockEnd = block.slice(1).search(/\n {2}[a-z][a-z0-9-]*:\n/);
-    const whisperOnly = blockEnd > 0 ? block.slice(0, blockEnd + 1) : block;
-    expect(whisperOnly).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest");
-    expect(whisperOnly).not.toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest-vulkan");
-    expect(whisperOnly).not.toContain("driver: nvidia");
+  it("rocm: -rocm image + /dev/dri + /dev/kfd", () => {
+    const w = whisperBlock(generateComposeExport(whisperState("rocm"), registry));
+    expect(w).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest-rocm");
+    expect(w).toContain("/dev/dri:/dev/dri");
+    expect(w).toContain("/dev/kfd:/dev/kfd");
+  });
+
+  it("cuda: -cuda image + nvidia deploy block", () => {
+    const w = whisperBlock(generateComposeExport(whisperState("cuda"), registry));
+    expect(w).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest-cuda");
+    expect(w).toContain("driver: nvidia");
+  });
+
+  it("is independent of the LLM gpuType (amd LLM + cpu whisper -> plain whisper)", () => {
+    const w = whisperBlock(
+      generateComposeExport(
+        makeState({ gpuType: "amd", gpuEnabled: true, whisperBackend: "cpu", enabledModules: ["jarvis-whisper-api"] }),
+        registry,
+      ),
+    );
+    expect(w).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest");
+    expect(w).not.toContain("/dev/dri");
   });
 
   it("does NOT mount the models volume on whisper", () => {
-    const output = generateComposeExport(whisperState("nvidia"), registry);
-    const blockStart = output.search(/\n {2}jarvis-whisper-api:\n/);
-    const block = output.slice(blockStart + 1);
-    const blockEnd = block.slice(1).search(/\n {2}[a-z][a-z0-9-]*:\n/);
-    const whisperOnly = blockEnd > 0 ? block.slice(0, blockEnd + 1) : block;
-    expect(whisperOnly).not.toContain("/models:/app/.models");
+    const w = whisperBlock(generateComposeExport(whisperState("cpu"), registry));
+    expect(w).not.toContain("/models:/app/.models");
   });
 
   it("still mounts models volume on llm-proxy (modelVolume: true)", () => {
-    const output = generateComposeExport(whisperState("nvidia"), registry);
+    const output = generateComposeExport(whisperState("cpu"), registry);
     expect(output).toContain("/models:/app/.models");
   });
 });
@@ -121,9 +144,9 @@ describe("compose-export-generator: release track", () => {
     expect(output).toContain("ghcr.io/alexberardi/jarvis-command-center:dev");
   });
 
-  it("uses :dev-cuda for GPU services on dev track with nvidia", () => {
+  it("uses :dev-cuda for whisper when whisperBackend=cuda on the dev track", () => {
     const output = generateComposeExport(
-      makeState({ releaseTrack: "dev", gpuEnabled: true, gpuType: "nvidia", enabledModules: ["jarvis-whisper-api"] }),
+      makeState({ releaseTrack: "dev", whisperBackend: "cuda", enabledModules: ["jarvis-whisper-api"] }),
       registry,
     );
     expect(output).toContain("ghcr.io/alexberardi/jarvis-whisper-api:dev-cuda");

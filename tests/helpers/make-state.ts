@@ -18,6 +18,7 @@ export function makeState(overrides: Partial<WizardState> = {}): WizardState {
     },
     dbUser: "jarvis",
     whisperModel: "base.en",
+    whisperBackend: "cpu",
     llmInterface: "Qwen25MediumUntrained",
     deploymentTarget: "standard",
     storagePath: "/var/lib/jarvis",

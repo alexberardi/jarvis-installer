@@ -298,6 +298,23 @@ function getContainerPort(service: ServiceDefinition): number {
  */
 const CPU_FALLBACK_GPU_VARIANTS = new Set<string>(["nvidia", "amd-rocm"]);
 
+// Whisper's variant is chosen EXPLICITLY via state.whisperBackend (default "cpu"),
+// independent of the auto-detected LLM gpuType. cpu -> plain image; cuda/vulkan/
+// rocm -> the matching published suffix. WHISPER_BACKEND_GPU maps the selection to
+// the gpuType the device emitter understands.
+const WHISPER_BACKEND_SUFFIX: Record<string, string> = {
+  cpu: "",
+  cuda: "-cuda",
+  vulkan: "-vulkan",
+  rocm: "-rocm",
+};
+const WHISPER_BACKEND_GPU: Record<string, string> = {
+  cpu: "none",
+  cuda: "nvidia",
+  vulkan: "amd",
+  rocm: "amd-rocm",
+};
+
 function shouldUseGpuVariant(service: ServiceDefinition, gpuType: string): boolean {
   if (!service.gpu) return false;
   if (service.cpuFallback && !CPU_FALLBACK_GPU_VARIANTS.has(gpuType)) return false;
@@ -315,6 +332,13 @@ function getExportImage(service: ServiceDefinition, state: WizardState): string 
     image = `${baseImage}:${tag}`;
   }
 
+  // Whisper: explicit backend selection (cpu default), independent of the LLM gpuType.
+  if (service.id === "jarvis-whisper-api") {
+    const suffix = WHISPER_BACKEND_SUFFIX[state.whisperBackend] ?? "";
+    if (!suffix) return image;
+    return image.includes(":") ? image + suffix : image + ":latest" + suffix;
+  }
+
   if (shouldUseGpuVariant(service, state.gpuType)) {
     const variantSuffix: Record<string, string> = {
       nvidia: "-cuda",
@@ -328,13 +352,8 @@ function getExportImage(service: ServiceDefinition, state: WizardState): string 
   return image;
 }
 
-function pushExportGpuConfig(
-  lines: string[],
-  service: ServiceDefinition,
-  state: WizardState,
-): void {
-  if (!shouldUseGpuVariant(service, state.gpuType) || !state.gpuEnabled) return;
-  if (state.gpuType === "nvidia") {
+function pushGpuDevices(lines: string[], gpuType: string): void {
+  if (gpuType === "nvidia") {
     lines.push("    ipc: host");
     lines.push('    shm_size: "8gb"');
     lines.push("    deploy:");
@@ -344,7 +363,7 @@ function pushExportGpuConfig(
     lines.push("            - driver: nvidia");
     lines.push("              count: all");
     lines.push("              capabilities: [gpu]");
-  } else if (state.gpuType === "amd" || state.gpuType === "amd-rocm") {
+  } else if (gpuType === "amd" || gpuType === "amd-rocm") {
     lines.push("    devices:");
     lines.push("      - /dev/dri:/dev/dri");
     lines.push("      - /dev/kfd:/dev/kfd");
@@ -354,6 +373,21 @@ function pushExportGpuConfig(
     lines.push("      - video");
     lines.push("      - render");
   }
+}
+
+function pushExportGpuConfig(
+  lines: string[],
+  service: ServiceDefinition,
+  state: WizardState,
+): void {
+  // Whisper: device passthrough follows the explicit whisperBackend selection,
+  // not the auto-detected LLM gpuType. cpu -> nothing.
+  if (service.id === "jarvis-whisper-api") {
+    pushGpuDevices(lines, WHISPER_BACKEND_GPU[state.whisperBackend] ?? "none");
+    return;
+  }
+  if (!shouldUseGpuVariant(service, state.gpuType) || !state.gpuEnabled) return;
+  pushGpuDevices(lines, state.gpuType);
 }
 
 /**
