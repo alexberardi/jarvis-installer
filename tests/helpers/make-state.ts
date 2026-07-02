@@ -14,6 +14,7 @@ export function makeState(overrides: Partial<WizardState> = {}): WizardState {
       ADMIN_API_KEY: "d".repeat(64),
       POSTGRES_PASSWORD: "e".repeat(32),
       REDIS_PASSWORD: "f".repeat(32),
+      MODEL_SERVICE_TOKEN: "9".repeat(64),
     },
     dbUser: "jarvis",
     whisperModel: "base.en",

@@ -91,6 +91,21 @@ function pushGpuConfig(
 }
 
 /**
+ * Env shared by the llm-proxy API container and its queue worker. Both MUST
+ * carry the SAME MODEL_SERVICE_TOKEN: the worker authenticates its calls to
+ * the model service (port 7705) with it, and the model service fails closed —
+ * every inference call 503s (with /health still green) when the token is unset.
+ */
+function pushLlmProxySharedEnv(lines: string[], state: WizardState): void {
+  lines.push("      # Model service (7705) internal auth — it rejects all inference calls with 503 when unset");
+  lines.push("      MODEL_SERVICE_TOKEN: ${MODEL_SERVICE_TOKEN}");
+  if (state.gpuType === "amd" || state.gpuType === "amd-rocm") {
+    lines.push("      # Flash attention's HIP kernel faults natively on RDNA4 (gfx1201); false is also faster there");
+    lines.push('      JARVIS_FLASH_ATTN: "false"');
+  }
+}
+
+/**
  * Returns all enabled services (core + selected recommended + selected optional).
  */
 export function getAllEnabledServices(
@@ -301,6 +316,10 @@ function generateServiceBlock(
     lines.push(`      LLM_INTERFACE_SEED: ${state.llmInterface}`);
   }
 
+  if (service.id === "jarvis-llm-proxy-api") {
+    pushLlmProxySharedEnv(lines, state);
+  }
+
   // Dependencies
   if (service.dependsOn.length > 0) {
     lines.push("    depends_on:");
@@ -385,6 +404,10 @@ function generateWorkerBlock(
   }
   for (const [key, val] of Object.entries(overrides)) {
     lines.push(`      ${key}: ${val}`);
+  }
+
+  if (parent.id === "jarvis-llm-proxy-api") {
+    pushLlmProxySharedEnv(lines, state);
   }
 
   lines.push(`    command: ${worker.command}`);
