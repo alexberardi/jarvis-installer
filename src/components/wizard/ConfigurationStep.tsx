@@ -4,6 +4,7 @@ import { parseRegistry, getCoreServices, getRecommendedServices, getOptionalServ
 import { generateAllSecrets } from "@/lib/secret-generator";
 import { detectPortConflicts, buildPortEntries, serviceIdToPortVar } from "@/lib/port-utils";
 import type { ServiceRegistry, ModelOption, LlmInterfaceOption } from "@/types/service-registry";
+import type { WhisperBackend } from "@/types/wizard";
 
 export default function ConfigurationStep() {
   const { state, dispatch } = useWizard();
@@ -144,6 +145,29 @@ export default function ConfigurationStep() {
               Instructions will be shown on the next step.
             </div>
           )}
+        </section>
+      )}
+
+      {/* Whisper GPU backend (conditional) */}
+      {whisperService && (
+        <section>
+          <h3 className="mb-3 text-sm font-medium">Whisper GPU Backend</h3>
+          <p className="mb-3 text-xs text-[var(--color-text-secondary)]">
+            Where speech-to-text runs. CPU is fast for the default base.en model and
+            leaves the GPU free for the LLM; pick a GPU backend only if you want Whisper
+            on the GPU.
+          </p>
+          <select
+            value={state.whisperBackend}
+            onChange={(e) => dispatch({ type: "SET_WHISPER_BACKEND", backend: e.target.value as WhisperBackend })}
+            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-3 py-2 text-sm"
+            data-testid="whisper-backend-select"
+          >
+            <option value="cpu">CPU (default)</option>
+            <option value="cuda">NVIDIA (CUDA)</option>
+            <option value="vulkan">AMD / generic (Vulkan)</option>
+            <option value="rocm">AMD (ROCm)</option>
+          </select>
         </section>
       )}
 
