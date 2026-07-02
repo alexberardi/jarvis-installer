@@ -326,8 +326,9 @@ function alembicCount(block: string): number {
 describe("compose-export-generator: migrate entrypoint wrapper", () => {
   // Every service the registry flags `migrate: true` must boot through the
   // entrypoint wrapper that runs `alembic upgrade head` then execs the image CMD.
-  // logs/tts are intentionally deferred from the migrate set: their images don't
-  // ship alembic and their prod DBs are un-stamped — they need separate wiring.
+  // jarvis-tts now ships alembic in its image and has DATABASE_URL wired, so it
+  // joins the migrate set (its settings writes 500'd fleet-wide without it).
+  // jarvis-logs stays deferred — its image doesn't ship alembic yet.
   const MIGRATE_SET = [
     "jarvis-config-service",
     "jarvis-auth",
@@ -335,6 +336,7 @@ describe("compose-export-generator: migrate entrypoint wrapper", () => {
     "jarvis-whisper-api",
     "jarvis-llm-proxy-api",
     "jarvis-notifications",
+    "jarvis-tts",
   ];
 
   // Enable every migrate-set service so each block is present in the output.
