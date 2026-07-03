@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import type { WizardState } from "@/types/wizard";
 import type { ServiceRegistry, ServiceDefinition, WorkerDefinition } from "@/types/service-registry";
 import { getAllEnabledServices, getInfraForServices } from "@/lib/compose-generator";
+import { imageDigestFor } from "@/lib/image-digests";
 
 interface AppKeyEntry {
   appId: string;
@@ -367,34 +368,30 @@ function shouldUseGpuVariant(service: ServiceDefinition, gpuType: string): boole
 }
 
 function getExportImage(service: ServiceDefinition, state: WizardState): string {
-  let image = service.image;
-  const isFirstParty = image.startsWith("ghcr.io/alexberardi/");
+  const image = service.image;
+  if (!image.startsWith("ghcr.io/alexberardi/")) return image;
+  const baseImage = image.includes(":") ? image.slice(0, image.lastIndexOf(":")) : image;
 
-  // Resolve the tag based on release track (compose-export bakes values inline)
-  if (isFirstParty) {
-    const tag = state.releaseTrack === "dev" ? "dev" : "latest";
-    const baseImage = image.includes(":") ? image.slice(0, image.lastIndexOf(":")) : image;
-    image = `${baseImage}:${tag}`;
-  }
-
-  // Whisper: explicit backend selection (cpu default), independent of the LLM gpuType.
+  // Variant suffix: whisper's explicit backend (cpu default), else the LLM gpu variant.
+  let suffix = "";
   if (service.id === "jarvis-whisper-api") {
-    const suffix = WHISPER_BACKEND_SUFFIX[state.whisperBackend] ?? "";
-    if (!suffix) return image;
-    return image.includes(":") ? image + suffix : image + ":latest" + suffix;
-  }
-
-  if (shouldUseGpuVariant(service, state.gpuType)) {
+    suffix = WHISPER_BACKEND_SUFFIX[state.whisperBackend] ?? "";
+  } else if (shouldUseGpuVariant(service, state.gpuType)) {
     const variantSuffix: Record<string, string> = {
       nvidia: "-cuda",
       amd: "-vulkan",
       "amd-rocm": "-rocm",
       none: "-cpu",
     };
-    const suffix = variantSuffix[state.gpuType] ?? "-cpu";
-    image = image.includes(":") ? image + suffix : image + ":latest" + suffix;
+    suffix = variantSuffix[state.gpuType] ?? "-cpu";
   }
-  return image;
+
+  // Export bakes values inline (no ${VAR}). Pin by digest when recorded, else the
+  // literal track tag.
+  const track = state.releaseTrack === "dev" ? "dev" : "latest";
+  const digest = imageDigestFor(baseImage, track, suffix);
+  if (digest) return `${baseImage}@${digest}`;
+  return `${baseImage}:${track}${suffix}`;
 }
 
 function pushGpuDevices(lines: string[], gpuType: string): void {

@@ -2,6 +2,7 @@ import type { WizardState } from "@/types/wizard";
 import type { ServiceRegistry, ServiceDefinition, InfrastructureDefinition, WorkerDefinition } from "@/types/service-registry";
 import { getCoreServices, getRecommendedServices, getOptionalServices, getRequiredInfrastructure } from "@/lib/service-registry";
 import { serviceIdToPortVar } from "@/lib/port-utils";
+import { imageDigestFor } from "@/lib/image-digests";
 
 const FIRST_PARTY_PREFIX = "ghcr.io/alexberardi/";
 
@@ -64,24 +65,26 @@ function getServiceImage(service: ServiceDefinition, state: WizardState): string
   if (!image.startsWith(FIRST_PARTY_PREFIX)) return image;
   const baseImage = image.includes(":") ? image.slice(0, image.lastIndexOf(":")) : image;
 
-  // Whisper: explicit backend selection (cpu default), independent of the LLM gpuType.
+  // Variant suffix: whisper's explicit backend (cpu default), else the LLM gpu variant.
+  let suffix = "";
   if (service.id === "jarvis-whisper-api") {
-    const suffix = WHISPER_BACKEND_SUFFIX[state.whisperBackend] ?? "";
-    return `${baseImage}:\${JARVIS_IMAGE_TAG:-latest}${suffix}`;
-  }
-
-  let gpuSuffix = "";
-  if (shouldUseGpuVariant(service, state.gpuType)) {
+    suffix = WHISPER_BACKEND_SUFFIX[state.whisperBackend] ?? "";
+  } else if (shouldUseGpuVariant(service, state.gpuType)) {
     const variantSuffix: Record<string, string> = {
       nvidia: "-cuda",
       amd: "-vulkan",
       "amd-rocm": "-rocm",
       none: "-cpu",
     };
-    gpuSuffix = variantSuffix[state.gpuType] ?? "";
+    suffix = variantSuffix[state.gpuType] ?? "";
   }
 
-  return `${baseImage}:\${JARVIS_IMAGE_TAG:-latest}${gpuSuffix}`;
+  // Pin by digest when recorded (immune to a GHCR tag overwrite); else the
+  // floating ${JARVIS_IMAGE_TAG} tag.
+  const track = state.releaseTrack === "dev" ? "dev" : "latest";
+  const digest = imageDigestFor(baseImage, track, suffix);
+  if (digest) return `${baseImage}@${digest}`;
+  return `${baseImage}:\${JARVIS_IMAGE_TAG:-latest}${suffix}`;
 }
 
 function pushGpuDevices(lines: string[], gpuType: string): void {
