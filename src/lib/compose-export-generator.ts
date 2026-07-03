@@ -39,6 +39,7 @@ interface SecretsMap {
   adminApiKey: string;
   grafanaPassword: string;
   modelServiceToken: string;
+  mqttPassword: string;
   dbUser: string;
 }
 
@@ -96,6 +97,7 @@ export function generateComposeExport(
     adminApiKey: resolveSecret("ADMIN_API_KEY"),
     grafanaPassword: resolveSecret("GRAFANA_ADMIN_PASSWORD"),
     modelServiceToken: resolveSecret("MODEL_SERVICE_TOKEN"),
+    mqttPassword: resolveSecret("MQTT_PASSWORD"),
     dbUser: state.dbUser || "jarvis",
   };
 
@@ -223,7 +225,13 @@ export function generateComposeExport(
     lines.push("    restart: unless-stopped");
   }
 
-  // Mosquitto — raw MQTT (LAN) + WebSockets (external nodes via Cloudflare Tunnel)
+  // Mosquitto — raw MQTT (LAN) + WebSockets (external nodes via Cloudflare Tunnel).
+  // Auth: hash the shared MQTT credential into a password_file at startup (the
+  // generator can't produce mosquitto's $7$ PBKDF2 hash), then serve an env-driven
+  // allow_anonymous. It defaults true so a live node that hasn't adopted creds yet
+  // still connects while credentials roll out; set MQTT_ALLOW_ANON=false to lock
+  // down. The password is inlined into the env (self-contained export); `$$`
+  // escapes Compose interpolation so the container shell expands the vars.
   if (infra.some((i) => i.id === "mosquitto")) {
     const mqttHostPort = state.infraPortOverrides["mosquitto"] ?? 1884;
     const mqttWsHostPort = state.infraPortOverrides["mosquitto-ws"] ?? 9883;
@@ -234,15 +242,21 @@ export function generateComposeExport(
     lines.push("    ports:");
     lines.push(`      - "${mqttHostPort}:1883"`);
     lines.push(`      - "${mqttWsHostPort}:9001"`);
+    lines.push("    environment:");
+    lines.push('      MQTT_USERNAME: "jarvis"');
+    lines.push(`      MQTT_PASSWORD: "${secrets.mqttPassword}"`);
+    lines.push('      MQTT_ALLOW_ANON: "${MQTT_ALLOW_ANON:-true}"');
     lines.push("    command:");
     lines.push("      - sh");
     lines.push("      - -c");
     lines.push("      - |");
+    lines.push('        mosquitto_passwd -b -c /tmp/pwfile "$$MQTT_USERNAME" "$$MQTT_PASSWORD"');
     lines.push("        echo 'listener 1883' > /tmp/mosquitto.conf");
     lines.push("        echo 'protocol mqtt' >> /tmp/mosquitto.conf");
     lines.push("        echo 'listener 9001' >> /tmp/mosquitto.conf");
     lines.push("        echo 'protocol websockets' >> /tmp/mosquitto.conf");
-    lines.push("        echo 'allow_anonymous true' >> /tmp/mosquitto.conf");
+    lines.push('        echo "allow_anonymous $$MQTT_ALLOW_ANON" >> /tmp/mosquitto.conf');
+    lines.push("        echo 'password_file /tmp/pwfile' >> /tmp/mosquitto.conf");
     lines.push("        exec mosquitto -c /tmp/mosquitto.conf -v");
     lines.push("    volumes:");
     lines.push(`      - ${storagePath}/mosquitto:/mosquitto/data`);
@@ -527,6 +541,11 @@ function generateExportServiceBlock(
     // localhost:1883 inside its own container and every publish 503s
     // ("MQTT not available"). Point it at the mosquitto container.
     lines.push('      JARVIS_MQTT_BROKER_URL: "mqtt://jarvis-mosquitto:1883"');
+    // Shared broker credential — the same secret the mosquitto password_file is
+    // built from. CC's get_mqtt_credentials() reads these to authenticate; it
+    // also hands them to nodes over authenticated HTTP (/mqtt-credentials).
+    lines.push('      MQTT_USERNAME: "jarvis"');
+    lines.push(`      MQTT_PASSWORD: "${secrets.mqttPassword}"`);
   }
 
   if (service.id === "jarvis-command-center" && state.llmInterface) {
