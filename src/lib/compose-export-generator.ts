@@ -229,10 +229,14 @@ export function generateComposeExport(
   // Mosquitto — raw MQTT (LAN) + WebSockets (external nodes via Cloudflare Tunnel).
   // Auth: hash the shared MQTT credential into a password_file at startup (the
   // generator can't produce mosquitto's $7$ PBKDF2 hash), then serve an env-driven
-  // allow_anonymous. It defaults true so a live node that hasn't adopted creds yet
-  // still connects while credentials roll out; set MQTT_ALLOW_ANON=false to lock
-  // down. The password is inlined into the env (self-contained export); `$$`
-  // escapes Compose interpolation so the container shell expands the vars.
+  // allow_anonymous. This is a FRESH install: the command-center reads
+  // MQTT_PASSWORD from its env and every node fetches broker creds over
+  // authenticated HTTP before it opens an MQTT connection, so there is no
+  // anonymous client to strand — it defaults FALSE (locked) to close the
+  // anonymous-broker RCE window from the first boot. Set MQTT_ALLOW_ANON=true
+  // only if adopting an old fleet whose nodes predate credential auto-fetch. The
+  // password is inlined into the env (self-contained export); `$$` escapes
+  // Compose interpolation so the container shell expands the vars.
   if (infra.some((i) => i.id === "mosquitto")) {
     const mqttHostPort = state.infraPortOverrides["mosquitto"] ?? 1884;
     const mqttWsHostPort = state.infraPortOverrides["mosquitto-ws"] ?? 9883;
@@ -246,7 +250,7 @@ export function generateComposeExport(
     lines.push("    environment:");
     lines.push('      MQTT_USERNAME: "jarvis"');
     lines.push(`      MQTT_PASSWORD: "${secrets.mqttPassword}"`);
-    lines.push('      MQTT_ALLOW_ANON: "${MQTT_ALLOW_ANON:-true}"');
+    lines.push('      MQTT_ALLOW_ANON: "${MQTT_ALLOW_ANON:-false}"');
     lines.push("    command:");
     lines.push("      - sh");
     lines.push("      - -c");
