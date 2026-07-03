@@ -19,6 +19,12 @@ export function imageDigestFor(
   suffix: string,
   digests: ImageDigestMap = imageDigests as ImageDigestMap,
 ): string | undefined {
+  // The dev track ALWAYS floats: it exists to run the freshest CI-built
+  // images (install-e2e dev lanes, service-commit dispatches), and a frozen
+  // digest silently pins those runs to whatever build existed when the map
+  // was last refreshed — CI then "validates" stale code. Digest pinning is
+  // for release tracks, where a point-in-time freeze is the point.
+  if (track === "dev") return undefined;
   const repo = baseImage.slice(baseImage.lastIndexOf("/") + 1);
   return digests[repo]?.[`${track}${suffix}`];
 }

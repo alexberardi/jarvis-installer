@@ -10,8 +10,13 @@ describe("imageDigestFor", () => {
   it("returns the digest for (repo, track+suffix)", () => {
     const cc = "ghcr.io/alexberardi/jarvis-command-center";
     expect(imageDigestFor(cc, "latest", "", digests)).toBe("sha256:aaaa");
-    expect(imageDigestFor(cc, "dev", "", digests)).toBe("sha256:bbbb");
     expect(imageDigestFor("ghcr.io/alexberardi/jarvis-whisper-api", "latest", "-cuda", digests)).toBe("sha256:cccc");
+  });
+
+  it("NEVER pins the dev track — dev exists to run the freshest CI-built images", () => {
+    const cc = "ghcr.io/alexberardi/jarvis-command-center";
+    // even with a recorded dev digest, dev floats on the tag
+    expect(imageDigestFor(cc, "dev", "", digests)).toBeUndefined();
   });
 
   it("returns undefined when no digest is recorded (graceful fallback in callers)", () => {
