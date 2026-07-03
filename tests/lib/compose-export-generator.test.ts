@@ -1,10 +1,19 @@
 import { describe, it, expect } from "vitest";
 import { generateComposeExport } from "@/lib/compose-export-generator";
 import { parseRegistry } from "@/lib/service-registry";
+import { imageDigestFor } from "@/lib/image-digests";
 import { makeState } from "../helpers/make-state";
 import registryJson from "../../public/service-registry.json";
 
 const registry = parseRegistry(registryJson);
+
+// Expected inlined image ref for the export (no ${VAR}): a digest when the map
+// pins it, else the literal track tag. Same lookup the export generator uses.
+function exportRef(base: string, suffix = "", track: "latest" | "dev" = "latest"): string {
+  const d = imageDigestFor(base, track, suffix);
+  return d ? `${base}@${d}` : `${base}:${track}${suffix}`;
+}
+const WHISPER = "ghcr.io/alexberardi/jarvis-whisper-api";
 
 describe("compose-export-generator: worker emission", () => {
   function nvidiaState() {
@@ -82,7 +91,7 @@ describe("compose-export-generator: whisper backend selection", () => {
 
   it("cpu (default): plain image, no GPU passthrough", () => {
     const w = whisperBlock(generateComposeExport(whisperState("cpu"), registry));
-    expect(w).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest");
+    expect(w).toContain("image: " + exportRef(WHISPER, ""));
     expect(w).not.toContain("-vulkan");
     expect(w).not.toContain("-cuda");
     expect(w).not.toContain("/dev/dri");
@@ -91,21 +100,21 @@ describe("compose-export-generator: whisper backend selection", () => {
 
   it("vulkan: -vulkan image + /dev/dri + render group", () => {
     const w = whisperBlock(generateComposeExport(whisperState("vulkan"), registry));
-    expect(w).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest-vulkan");
+    expect(w).toContain("image: " + exportRef(WHISPER, "-vulkan"));
     expect(w).toContain("/dev/dri:/dev/dri");
     expect(w).toContain("- render");
   });
 
   it("rocm: -rocm image + /dev/dri + /dev/kfd", () => {
     const w = whisperBlock(generateComposeExport(whisperState("rocm"), registry));
-    expect(w).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest-rocm");
+    expect(w).toContain("image: " + exportRef(WHISPER, "-rocm"));
     expect(w).toContain("/dev/dri:/dev/dri");
     expect(w).toContain("/dev/kfd:/dev/kfd");
   });
 
   it("cuda: -cuda image + nvidia deploy block", () => {
     const w = whisperBlock(generateComposeExport(whisperState("cuda"), registry));
-    expect(w).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest-cuda");
+    expect(w).toContain("image: " + exportRef(WHISPER, "-cuda"));
     expect(w).toContain("driver: nvidia");
   });
 
@@ -116,7 +125,7 @@ describe("compose-export-generator: whisper backend selection", () => {
         registry,
       ),
     );
-    expect(w).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest");
+    expect(w).toContain("image: " + exportRef(WHISPER, ""));
     expect(w).not.toContain("/dev/dri");
   });
 
@@ -132,24 +141,24 @@ describe("compose-export-generator: whisper backend selection", () => {
 });
 
 describe("compose-export-generator: release track", () => {
-  it("uses :latest tag when releaseTrack is stable", () => {
+  it("pins the stable (latest) track for first-party images", () => {
     const output = generateComposeExport(makeState({ releaseTrack: "stable" }), registry);
-    expect(output).toContain("ghcr.io/alexberardi/jarvis-auth:latest");
-    expect(output).toContain("ghcr.io/alexberardi/jarvis-command-center:latest");
+    expect(output).toContain(exportRef("ghcr.io/alexberardi/jarvis-auth", "", "latest"));
+    expect(output).toContain(exportRef("ghcr.io/alexberardi/jarvis-command-center", "", "latest"));
   });
 
-  it("uses :dev tag when releaseTrack is dev", () => {
+  it("pins the dev track for first-party images", () => {
     const output = generateComposeExport(makeState({ releaseTrack: "dev" }), registry);
-    expect(output).toContain("ghcr.io/alexberardi/jarvis-auth:dev");
-    expect(output).toContain("ghcr.io/alexberardi/jarvis-command-center:dev");
+    expect(output).toContain(exportRef("ghcr.io/alexberardi/jarvis-auth", "", "dev"));
+    expect(output).toContain(exportRef("ghcr.io/alexberardi/jarvis-command-center", "", "dev"));
   });
 
-  it("uses :dev-cuda for whisper when whisperBackend=cuda on the dev track", () => {
+  it("selects the dev-cuda variant for whisper when whisperBackend=cuda on the dev track", () => {
     const output = generateComposeExport(
       makeState({ releaseTrack: "dev", whisperBackend: "cuda", enabledModules: ["jarvis-whisper-api"] }),
       registry,
     );
-    expect(output).toContain("ghcr.io/alexberardi/jarvis-whisper-api:dev-cuda");
+    expect(output).toContain(exportRef(WHISPER, "-cuda", "dev"));
   });
 
   it("does not apply release track to infrastructure images", () => {

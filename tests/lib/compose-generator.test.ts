@@ -1,10 +1,22 @@
 import { describe, it, expect } from "vitest";
 import { generateCompose } from "@/lib/compose-generator";
 import { parseRegistry } from "@/lib/service-registry";
+import { imageDigestFor } from "@/lib/image-digests";
 import { makeState } from "../helpers/make-state";
 import registryJson from "../../public/service-registry.json";
 
 const registry = parseRegistry(registryJson);
+
+// Expected first-party image ref for (repo, variant suffix) — a digest when the
+// map pins it, else the floating ${JARVIS_IMAGE_TAG} tag. Computed through the
+// same lookup the generator uses, so these verify VARIANT selection and survive
+// a digest-map refresh.
+function imgRef(base: string, suffix = "", track: "latest" | "dev" = "latest"): string {
+  const d = imageDigestFor(base, track, suffix);
+  return d ? `${base}@${d}` : `${base}:\${JARVIS_IMAGE_TAG:-latest}${suffix}`;
+}
+const LLM = "ghcr.io/alexberardi/jarvis-llm-proxy-api";
+const WHISPER = "ghcr.io/alexberardi/jarvis-whisper-api";
 
 describe("compose-generator", () => {
   it("generates output starting with services:", () => {
@@ -123,10 +135,10 @@ describe("compose-generator", () => {
     expect(output).toContain("jarvis-postgres-data:");
   });
 
-  it("uses JARVIS_IMAGE_TAG variable for first-party images", () => {
+  it("pins first-party images (digest when recorded, else JARVIS_IMAGE_TAG tag)", () => {
     const output = generateCompose(makeState(), registry);
-    expect(output).toContain("ghcr.io/alexberardi/jarvis-auth:${JARVIS_IMAGE_TAG:-latest}");
-    expect(output).toContain("ghcr.io/alexberardi/jarvis-command-center:${JARVIS_IMAGE_TAG:-latest}");
+    expect(output).toContain(imgRef("ghcr.io/alexberardi/jarvis-auth"));
+    expect(output).toContain(imgRef("ghcr.io/alexberardi/jarvis-command-center"));
   });
 
   it("does not use JARVIS_IMAGE_TAG for infrastructure images", () => {
@@ -247,9 +259,7 @@ describe("compose-generator", () => {
         makeState({ gpuType: "nvidia", gpuEnabled: true }),
         registry,
       );
-      expect(output).toContain(
-        "image: ghcr.io/alexberardi/jarvis-llm-proxy-api:${JARVIS_IMAGE_TAG:-latest}-cuda",
-      );
+      expect(output).toContain("image: " + imgRef(LLM, "-cuda"));
     });
 
     it("appends -vulkan to llm-proxy image when amd Vulkan is selected", () => {
@@ -257,9 +267,7 @@ describe("compose-generator", () => {
         makeState({ gpuType: "amd", gpuEnabled: true }),
         registry,
       );
-      expect(output).toContain(
-        "image: ghcr.io/alexberardi/jarvis-llm-proxy-api:${JARVIS_IMAGE_TAG:-latest}-vulkan",
-      );
+      expect(output).toContain("image: " + imgRef(LLM, "-vulkan"));
     });
 
     it("appends -rocm to llm-proxy image when amd-rocm is selected", () => {
@@ -267,9 +275,7 @@ describe("compose-generator", () => {
         makeState({ gpuType: "amd-rocm", gpuEnabled: true }),
         registry,
       );
-      expect(output).toContain(
-        "image: ghcr.io/alexberardi/jarvis-llm-proxy-api:${JARVIS_IMAGE_TAG:-latest}-rocm",
-      );
+      expect(output).toContain("image: " + imgRef(LLM, "-rocm"));
     });
 
     it("appends -cpu to llm-proxy image when no GPU is selected", () => {
@@ -277,9 +283,7 @@ describe("compose-generator", () => {
         makeState({ gpuType: "none", gpuEnabled: false }),
         registry,
       );
-      expect(output).toContain(
-        "image: ghcr.io/alexberardi/jarvis-llm-proxy-api:${JARVIS_IMAGE_TAG:-latest}-cpu",
-      );
+      expect(output).toContain("image: " + imgRef(LLM, "-cpu"));
     });
 
     it("does not apply variant suffix to non-GPU services", () => {
@@ -287,9 +291,7 @@ describe("compose-generator", () => {
         makeState({ gpuType: "nvidia", gpuEnabled: true }),
         registry,
       );
-      expect(output).toContain(
-        "image: ghcr.io/alexberardi/jarvis-config-service:${JARVIS_IMAGE_TAG:-latest}",
-      );
+      expect(output).toContain("image: " + imgRef("ghcr.io/alexberardi/jarvis-config-service"));
       expect(output).not.toContain(
         "image: ghcr.io/alexberardi/jarvis-config-service:${JARVIS_IMAGE_TAG:-latest}-cuda",
       );
@@ -301,7 +303,7 @@ describe("compose-generator", () => {
         makeState({ enabledModules: ["jarvis-whisper-api"], gpuType: "amd", gpuEnabled: true, whisperBackend: "cpu" }),
         registry,
       );
-      expect(output).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}");
+      expect(output).toContain("image: " + imgRef(WHISPER, ""));
       expect(output).not.toContain("jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-cuda");
       expect(output).not.toContain("jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-vulkan");
       expect(output).not.toContain("jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-rocm");
@@ -312,7 +314,7 @@ describe("compose-generator", () => {
         makeState({ enabledModules: ["jarvis-whisper-api"], whisperBackend: "cuda" }),
         registry,
       );
-      expect(output).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-cuda");
+      expect(output).toContain("image: " + imgRef(WHISPER, "-cuda"));
     });
 
     it("whisper vulkan: -vulkan image", () => {
@@ -320,7 +322,7 @@ describe("compose-generator", () => {
         makeState({ enabledModules: ["jarvis-whisper-api"], whisperBackend: "vulkan" }),
         registry,
       );
-      expect(output).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-vulkan");
+      expect(output).toContain("image: " + imgRef(WHISPER, "-vulkan"));
     });
 
     it("whisper rocm: -rocm image", () => {
@@ -328,7 +330,7 @@ describe("compose-generator", () => {
         makeState({ enabledModules: ["jarvis-whisper-api"], whisperBackend: "rocm" }),
         registry,
       );
-      expect(output).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:${JARVIS_IMAGE_TAG:-latest}-rocm");
+      expect(output).toContain("image: " + imgRef(WHISPER, "-rocm"));
     });
 
     it("worker image inherits parent's GPU variant suffix", () => {
@@ -338,9 +340,7 @@ describe("compose-generator", () => {
       );
       const workerStart = output.indexOf("llm-proxy-worker:");
       const rest = output.slice(workerStart);
-      expect(rest).toContain(
-        "image: ghcr.io/alexberardi/jarvis-llm-proxy-api:${JARVIS_IMAGE_TAG:-latest}-vulkan",
-      );
+      expect(rest).toContain("image: " + imgRef(LLM, "-vulkan"));
     });
 
     it("emits nvidia deploy.resources block for nvidia GPU on llm-proxy", () => {
