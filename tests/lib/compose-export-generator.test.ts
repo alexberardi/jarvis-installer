@@ -329,6 +329,38 @@ describe("compose-export-generator: config-service seed external coords", () => 
   });
 });
 
+describe("compose-export-generator: MQTT broker auth", () => {
+  it("mosquitto builds a password_file from the shared credential at startup", () => {
+    // The generator can't produce mosquitto's $7$ PBKDF2 hash, so the container
+    // runs mosquitto_passwd at startup and points the broker at the result.
+    const m = serviceBlock(generateComposeExport(makeState(), registry), "mosquitto");
+    expect(m).toContain("mosquitto_passwd -b -c /tmp/pwfile");
+    expect(m).toContain("password_file /tmp/pwfile");
+  });
+
+  it("mosquitto allow_anonymous is env-driven, defaulting true (transition window)", () => {
+    // Transition default lets a live node that hasn't adopted creds still connect;
+    // MQTT_ALLOW_ANON=false locks it down. $$ escapes Compose interpolation so the
+    // container shell expands the env var.
+    const m = serviceBlock(generateComposeExport(makeState(), registry), "mosquitto");
+    expect(m).toContain('MQTT_ALLOW_ANON: "${MQTT_ALLOW_ANON:-true}"');
+    expect(m).toContain("allow_anonymous $$MQTT_ALLOW_ANON");
+  });
+
+  it("mosquitto + command-center share the SAME inlined MQTT password (else CC can't auth)", () => {
+    const output = generateComposeExport(makeState(), registry);
+    const m = serviceBlock(output, "mosquitto");
+    const cc = serviceBlock(output, "jarvis-command-center");
+    const pw = m.match(/MQTT_PASSWORD: "([^"]+)"/)?.[1];
+    expect(pw).toBeTruthy();
+    expect(pw).not.toBe("changeme");
+    // Memoized resolveSecret guarantees both references resolve identically.
+    expect(cc).toContain(`MQTT_PASSWORD: "${pw}"`);
+    expect(m).toContain('MQTT_USERNAME: "jarvis"');
+    expect(cc).toContain('MQTT_USERNAME: "jarvis"');
+  });
+});
+
 // Grab a single service's YAML block, anchored on its "  <id>:" header. Shared
 // helper so the migrate-entrypoint suite can isolate per-service blocks.
 function serviceBlock(output: string, id: string): string {

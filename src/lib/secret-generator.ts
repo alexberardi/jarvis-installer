@@ -20,6 +20,10 @@ export const SECRET_KEYS = [
   // (port 7705). The model service fails closed: with no token it 503s every
   // inference call while /health stays green.
   "MODEL_SERVICE_TOKEN",
+  // Shared MQTT broker credential (username is the literal 'jarvis'). The
+  // mosquitto container hashes this into a password_file at startup; command-
+  // center authenticates with it and hands it to nodes. 'PASSWORD' -> 16B/32hex.
+  "MQTT_PASSWORD",
 ] as const;
 
 export type SecretKey = (typeof SECRET_KEYS)[number];
