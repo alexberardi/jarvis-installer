@@ -20,6 +20,16 @@ function generateAppKey(appId: string): AppKeyEntry {
   return { appId, rawKey, bcryptHash };
 }
 
+/** A strong random secret (base64url, ~43 chars) — well above any length guard. */
+function generateSecret(bytes = 32): string {
+  const buf = new Uint8Array(bytes);
+  crypto.getRandomValues(buf);
+  return btoa(String.fromCharCode(...buf))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
+}
+
 interface SecretsMap {
   pgPassword: string;
   redisPassword: string;
@@ -58,15 +68,34 @@ export function generateComposeExport(
     appKeys.set(svc.id, generateAppKey(svc.id));
   }
 
+  // Resolve each secret to a strong value ONCE and reuse it everywhere. A wizard-
+  // provided value wins; otherwise we generate a strong random secret (never a
+  // "changeme" placeholder — which is both insecure and now rejected by services'
+  // boot-time secret guard). Memoized by ref so the same secret is identical
+  // across every service that references it (previously the SecretsMap fell back
+  // to "changeme" while the generic env loop fell back to "" — a mismatch that
+  // silently broke fleet-wide JWT validation on a partial-wizard export).
+  const resolvedSecrets = new Map<string, string>();
+  const resolveSecret = (ref: string): string => {
+    const provided = state.secrets[ref];
+    if (provided) return provided;
+    let generated = resolvedSecrets.get(ref);
+    if (!generated) {
+      generated = generateSecret();
+      resolvedSecrets.set(ref, generated);
+    }
+    return generated;
+  };
+
   const secrets: SecretsMap = {
-    pgPassword: state.secrets["POSTGRES_PASSWORD"] ?? "changeme",
-    redisPassword: state.secrets["REDIS_PASSWORD"] ?? "changeme",
-    authSecretKey: state.secrets["AUTH_SECRET_KEY"] ?? "changeme",
-    configAdminToken: state.secrets["JARVIS_CONFIG_ADMIN_TOKEN"] ?? "changeme",
-    authAdminToken: state.secrets["JARVIS_AUTH_ADMIN_TOKEN"] ?? "changeme",
-    adminApiKey: state.secrets["ADMIN_API_KEY"] ?? "changeme",
-    grafanaPassword: state.secrets["GRAFANA_ADMIN_PASSWORD"] ?? "changeme",
-    modelServiceToken: state.secrets["MODEL_SERVICE_TOKEN"] ?? "changeme",
+    pgPassword: resolveSecret("POSTGRES_PASSWORD"),
+    redisPassword: resolveSecret("REDIS_PASSWORD"),
+    authSecretKey: resolveSecret("AUTH_SECRET_KEY"),
+    configAdminToken: resolveSecret("JARVIS_CONFIG_ADMIN_TOKEN"),
+    authAdminToken: resolveSecret("JARVIS_AUTH_ADMIN_TOKEN"),
+    adminApiKey: resolveSecret("ADMIN_API_KEY"),
+    grafanaPassword: resolveSecret("GRAFANA_ADMIN_PASSWORD"),
+    modelServiceToken: resolveSecret("MODEL_SERVICE_TOKEN"),
     dbUser: state.dbUser || "jarvis",
   };
 
@@ -239,6 +268,7 @@ export function generateComposeExport(
         secrets,
         allEnabled,
         storagePath,
+        resolveSecret,
       ),
     );
     if (service.workers) {
@@ -254,6 +284,7 @@ export function generateComposeExport(
             secrets,
             allEnabled,
             storagePath,
+            resolveSecret,
           ),
         );
       }
@@ -417,6 +448,7 @@ function generateExportServiceBlock(
   secrets: SecretsMap,
   allEnabled: ServiceDefinition[],
   storagePath: string,
+  resolveSecret: (ref: string) => string,
 ): string[] {
   const lines: string[] = [];
   const hostPort = state.portOverrides[service.id] ?? service.port;
@@ -434,6 +466,10 @@ function generateExportServiceBlock(
 
   // Environment
   lines.push("    environment:");
+  // Prod deployment: opt every service into strict boot-time secret enforcement.
+  // Safe here because the export bakes strong generated secrets (above), so the
+  // guard has nothing to trip on; it protects against a later manual weakening.
+  lines.push('      JARVIS_ENV: "production"');
 
   // Discovery URL style. In a compose deployment, in-container services reach
   // shared infra registered as `localhost` (e.g. the MQTT broker) via the host —
@@ -465,7 +501,7 @@ function generateExportServiceBlock(
     if (env.name === "DATABASE_URL" || env.name === "MIGRATIONS_DATABASE_URL") continue;
 
     if (env.secretRef) {
-      const value = state.secrets[env.secretRef] ?? "";
+      const value = resolveSecret(env.secretRef);
       lines.push(`      ${env.name}: "${value}"`);
     } else if (env.default) {
       lines.push(`      ${env.name}: "${env.default}"`);
@@ -780,6 +816,7 @@ function generateExportWorkerBlock(
   secrets: SecretsMap,
   allEnabled: ServiceDefinition[],
   storagePath: string,
+  resolveSecret: (ref: string) => string,
 ): string[] {
   const lines: string[] = [];
   const image = getExportImage(parent, state);
@@ -816,7 +853,7 @@ function generateExportWorkerBlock(
     if (env.name === "DATABASE_URL" || env.name === "MIGRATIONS_DATABASE_URL") continue;
     if (overrideKeys.has(env.name)) continue;
     if (env.secretRef) {
-      const value = state.secrets[env.secretRef] ?? "";
+      const value = resolveSecret(env.secretRef);
       lines.push(`      ${env.name}: "${value}"`);
     } else if (env.default) {
       lines.push(`      ${env.name}: "${env.default}"`);
