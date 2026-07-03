@@ -238,7 +238,7 @@ export function generateComposeExport(
     const mqttWsHostPort = state.infraPortOverrides["mosquitto-ws"] ?? 9883;
     lines.push("");
     lines.push("  mosquitto:");
-    lines.push("    image: eclipse-mosquitto:2");
+    lines.push("    image: eclipse-mosquitto:2.0");
     lines.push("    container_name: jarvis-mosquitto");
     lines.push("    ports:");
     lines.push(`      - "${mqttHostPort}:1883"`);
