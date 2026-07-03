@@ -15,6 +15,11 @@
  *   --modules a,b,c   recommended modules to enable on top of core
  *                     (default: whisper, tts, notifications, web, admin — i.e. all)
  *   --gpu MODE        none | nvidia | amd | amd-rocm (default: none — CI has no GPU)
+ *   --whisper-backend cpu | cuda | vulkan | rocm (default: cpu). Selects the
+ *                     whisper image variant + device passthrough, independent of
+ *                     --gpu — same as the wizard's separate whisper choice. The
+ *                     GPU install-e2e lanes use this to exercise the whisper
+ *                     GPU images on real rented GPUs.
  *   --release TRACK   stable | dev (default: stable)
  *
  * Writes the compose to --out and a one-line summary to stderr so stdout can be
@@ -29,7 +34,7 @@ import { generateCompose, getAllEnabledServices } from "../src/lib/compose-gener
 import { generateEnv } from "../src/lib/env-generator";
 import { generateInitDbScript } from "../src/lib/init-db-generator";
 import { parseRegistry } from "../src/lib/service-registry";
-import type { GpuType, WizardState } from "../src/types/wizard";
+import type { GpuType, WhisperBackend, WizardState } from "../src/types/wizard";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -43,12 +48,21 @@ const { values } = parseArgs({
         "jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin",
     },
     gpu: { type: "string", default: "none" },
+    "whisper-backend": { type: "string", default: "cpu" },
     release: { type: "string", default: "stable" },
     // "export" = self-contained compose (values inlined). "standard" = the
     // .env bundle (docker-compose.yml with ${VAR} refs + .env + init-db.sh).
     mode: { type: "string", default: "export" },
   },
 });
+
+const WHISPER_BACKENDS = new Set(["cpu", "cuda", "vulkan", "rocm"]);
+if (!WHISPER_BACKENDS.has(values["whisper-backend"]!)) {
+  console.error(
+    `[gen-export-compose] invalid --whisper-backend "${values["whisper-backend"]}" (expected cpu|cuda|vulkan|rocm)`,
+  );
+  process.exit(1);
+}
 
 const registry = parseRegistry(
   JSON.parse(
@@ -77,7 +91,7 @@ const state: WizardState = {
   },
   dbUser: "jarvis",
   whisperModel: "base.en",
-  whisperBackend: "cpu",
+  whisperBackend: values["whisper-backend"] as WhisperBackend,
   // The behavior lane drives CC's real native-tool provider against a cloud model.
   llmInterface: "ChatGPTOpenAI",
   deploymentTarget: "compose-export",
@@ -106,6 +120,6 @@ if (values.mode === "standard") {
 } else {
   writeFileSync(values.out!, generateComposeExport(state, registry, state.storagePath));
   console.error(
-    `[gen-export-compose] export → ${values.out} — modules=[${state.enabledModules.join(", ")}] gpu=${values.gpu} release=${values.release}`,
+    `[gen-export-compose] export → ${values.out} — modules=[${state.enabledModules.join(", ")}] gpu=${values.gpu} whisper=${values["whisper-backend"]} release=${values.release}`,
   );
 }
