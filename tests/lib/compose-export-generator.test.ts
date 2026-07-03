@@ -347,12 +347,14 @@ describe("compose-export-generator: MQTT broker auth", () => {
     expect(m).toContain("password_file /tmp/pwfile");
   });
 
-  it("mosquitto allow_anonymous is env-driven, defaulting true (transition window)", () => {
-    // Transition default lets a live node that hasn't adopted creds still connect;
-    // MQTT_ALLOW_ANON=false locks it down. $$ escapes Compose interpolation so the
-    // container shell expands the env var.
+  it("mosquitto allow_anonymous is env-driven, defaulting FALSE (fresh installs lock the broker)", () => {
+    // A fresh install has no un-migrated fleet: the CC reads MQTT_PASSWORD and
+    // every node fetches broker creds over authenticated HTTP before connecting,
+    // so the broker locks from the first boot (closes the anonymous-broker RCE
+    // window). MQTT_ALLOW_ANON=true re-opens it only when adopting an old fleet.
+    // $$ escapes Compose interpolation so the container shell expands the env var.
     const m = serviceBlock(generateComposeExport(makeState(), registry), "mosquitto");
-    expect(m).toContain('MQTT_ALLOW_ANON: "${MQTT_ALLOW_ANON:-true}"');
+    expect(m).toContain('MQTT_ALLOW_ANON: "${MQTT_ALLOW_ANON:-false}"');
     expect(m).toContain("allow_anonymous $$MQTT_ALLOW_ANON");
   });
 
