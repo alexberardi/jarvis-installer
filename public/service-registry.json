@@ -282,7 +282,7 @@
       "id": "mosquitto",
       "name": "Mosquitto",
       "description": "MQTT message broker for node communication",
-      "image": "eclipse-mosquitto:2",
+      "image": "eclipse-mosquitto:2.0",
       "port": 1884,
       "envVars": [],
       "volumes": ["jarvis-mosquitto-data:/mosquitto/data"]
