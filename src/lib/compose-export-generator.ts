@@ -641,14 +641,14 @@ function generateExportServiceBlock(
       lines.push(`        ${line}`);
     }
   } else if (service.id === "jarvis-llm-proxy-api") {
-    // llm-proxy has NO image CMD, so it MUST keep a command that starts its two
-    // uvicorn services. The alembic prefix is dropped — the entrypoint migrates.
-    lines.push("    command:");
-    lines.push("      - sh");
-    lines.push("      - -c");
-    lines.push("      - |");
-    lines.push("        python -m uvicorn services.model_service:app --host 0.0.0.0 --port 7705 &");
-    lines.push(`        exec python -m uvicorn main:app --host 0.0.0.0 --port ${containerPort}`);
+    // The migrate entrypoint above clears the image CMD, so llm-proxy MUST keep
+    // an explicit command — and it MUST be the image's supervised launcher
+    // scripts/serve.sh (API in the foreground + model service respawned with
+    // backoff), NOT the old unsupervised `uvicorn model_service & exec uvicorn
+    // main` pattern: when the model service crashed natively, nothing respawned
+    // it and the API 503'd forever (2026-07-02 outage). serve.sh defaults
+    // SERVER_PORT=7704 / MODEL_SERVICE_PORT=7705, matching what we publish.
+    lines.push('    command: ["bash", "scripts/serve.sh"]');
   } else if (service.migrate) {
     // Overriding `entrypoint` CLEARS the image's CMD, so a migrate service with
     // no explicit command would `exec ""` (empty $@) and exit right after

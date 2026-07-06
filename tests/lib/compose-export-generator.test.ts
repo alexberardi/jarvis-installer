@@ -465,16 +465,19 @@ describe("compose-export-generator: migrate entrypoint wrapper", () => {
     expect(block).toContain('"uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7706"');
   });
 
-  it("llm-proxy keeps its dual-uvicorn command but drops the alembic prefix", () => {
+  it("llm-proxy runs the supervised scripts/serve.sh launcher, not raw dual-uvicorn", () => {
     const output = generateComposeExport(fullState(), registry);
     const block = serviceBlock(output, "jarvis-llm-proxy-api");
     expect(block).toContain("entrypoint:");
-    // dual-uvicorn command still present (no image CMD to fall through to)
-    expect(block).toContain(
-      "python -m uvicorn services.model_service:app --host 0.0.0.0 --port 7705 &",
-    );
-    expect(block).toContain("exec python -m uvicorn main:app --host 0.0.0.0 --port 7704");
-    // but the leading migrate is gone — alembic appears only in the entrypoint
+    // The migrate entrypoint clears the image CMD, so an explicit command is
+    // still required — and it MUST be the image's supervised launcher, which
+    // respawns the model service with backoff when it dies.
+    expect(block).toContain('    command: ["bash", "scripts/serve.sh"]');
+    // The old unsupervised pattern is the 2026-07-02 outage signature: the
+    // model service crashes, nothing respawns it, the API 503s forever.
+    expect(block).not.toContain("uvicorn services.model_service:app");
+    expect(block).not.toContain("exec python -m uvicorn main:app");
+    // alembic appears only in the entrypoint, not duplicated in the command
     expect(alembicCount(block)).toBe(1);
   });
 });
