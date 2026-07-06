@@ -82,5 +82,17 @@ export function generateEnv(state: WizardState, registry: ServiceRegistry): stri
   lines.push(`JARVIS_IMAGE_TAG=${state.releaseTrack === "dev" ? "dev" : "latest"}`);
   lines.push("");
 
+  // GPU backends — the ONLY durable record of these choices (the compose
+  // pins images by digest). jarvis-admin's reconcile reconstructs its state
+  // from .env; without these keys a later reconcile silently downgrades
+  // whisper to the CPU image and strips TTS's GPU passthrough.
+  lines.push("# --- GPU Backends ---");
+  lines.push(`WHISPER_BACKEND=${state.whisperBackend}`);
+  lines.push(`TTS_BACKEND=${state.ttsBackend}`);
+  if (state.ttsBackend === "cuda") {
+    lines.push("TTS_GPU_DEVICE=0");
+  }
+  lines.push("");
+
   return lines.join("\n");
 }

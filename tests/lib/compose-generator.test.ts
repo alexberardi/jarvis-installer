@@ -384,6 +384,40 @@ describe("compose-generator", () => {
     });
   });
 
+  describe("TTS backend (device passthrough only — no image variant)", () => {
+    const ttsBlock = (output: string): string => {
+      const start = output.indexOf("jarvis-tts:");
+      const rest = output.slice(start);
+      const next = rest.search(/\n  [a-z][a-z0-9-]*:\n/);
+      return next > 0 ? rest.slice(0, next) : rest;
+    };
+
+    it("cpu (default): no GPU passthrough, no kokoro device env", () => {
+      const output = generateCompose(
+        makeState({ enabledModules: ["jarvis-tts"] }),
+        registry,
+      );
+      const block = ttsBlock(output);
+      expect(block).not.toContain("driver: nvidia");
+      expect(block).not.toContain("TTS_KOKORO_DEVICE");
+    });
+
+    it("cuda: single-GPU reservation via TTS_GPU_DEVICE + kokoro env fallback, no image suffix", () => {
+      const output = generateCompose(
+        makeState({ enabledModules: ["jarvis-tts"], ttsBackend: "cuda" }),
+        registry,
+      );
+      const block = ttsBlock(output);
+      // Pinned to ONE gpu: `count: all` OOMs on hosts whose GPU0 is
+      // already full of LLM+whisper.
+      expect(block).toContain("device_ids: ['${TTS_GPU_DEVICE:-0}']");
+      expect(block).toContain("driver: nvidia");
+      expect(block).not.toContain("count: all");
+      expect(block).toContain("TTS_KOKORO_DEVICE: ${TTS_BACKEND:-cpu}");
+      expect(block).not.toContain("jarvis-tts:latest-cuda");
+    });
+  });
+
   describe("llm-proxy MODEL_SERVICE_TOKEN + AMD flash-attn", () => {
     // Grab a single service's YAML block, anchored on its "  <id>:" header.
     const serviceBlock = (output: string, id: string): string => {

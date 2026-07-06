@@ -115,6 +115,22 @@ function pushGpuConfig(
   service: ServiceDefinition,
   state: WizardState,
 ): void {
+  // TTS: device passthrough follows the explicit ttsBackend selection (cpu
+  // default). No image variant — the stock image's torch is CUDA-capable.
+  // Pinned to a SINGLE gpu (TTS_GPU_DEVICE, default 0): `count: all` invites
+  // OOM on hosts whose GPU0 is already full of LLM+whisper.
+  if (service.id === "jarvis-tts") {
+    if (state.ttsBackend === "cuda") {
+      lines.push("    deploy:");
+      lines.push("      resources:");
+      lines.push("        reservations:");
+      lines.push("          devices:");
+      lines.push("            - driver: nvidia");
+      lines.push("              device_ids: ['${TTS_GPU_DEVICE:-0}']");
+      lines.push("              capabilities: [gpu]");
+    }
+    return;
+  }
   // Whisper: device passthrough follows the explicit whisperBackend selection,
   // not the auto-detected LLM gpuType. cpu -> nothing.
   if (service.id === "jarvis-whisper-api") {
@@ -345,6 +361,12 @@ function generateServiceBlock(
   if (nonDefaultWhisper) {
     lines.push(`      WHISPER_MODEL: /whisper-models/ggml-${state.whisperModel}.bin`);
   }
+  if (service.id === "jarvis-tts" && state.ttsBackend === "cuda") {
+    // env_fallback for a fresh install whose settings DB has no
+    // tts.kokoro_device row yet (a DB value wins once set).
+    lines.push("      TTS_KOKORO_DEVICE: ${TTS_BACKEND:-cpu}");
+  }
+
 
   // LLM interface seed for command-center
   if (service.id === "jarvis-command-center" && state.llmInterface) {

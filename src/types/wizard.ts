@@ -7,6 +7,12 @@ export type GpuType = "nvidia" | "amd" | "amd-rocm" | "none";
  */
 export type WhisperBackend = "cpu" | "cuda" | "vulkan" | "rocm";
 
+/**
+ * TTS (Kokoro) inference device. Device passthrough only — the stock
+ * jarvis-tts image ships CUDA-capable torch, so no image variant exists.
+ */
+export type TtsBackend = "cpu" | "cuda";
+
 export interface WizardState {
   currentStep: number;
   totalSteps: number;
@@ -21,6 +27,7 @@ export interface WizardState {
   dbUser: string;
   whisperModel: string;
   whisperBackend: WhisperBackend;
+  ttsBackend: TtsBackend;
   llmInterface: string;
 
   // Deployment mode
@@ -53,6 +60,7 @@ export type WizardAction =
   | { type: "SET_DB_USER"; user: string }
   | { type: "SET_WHISPER_MODEL"; model: string }
   | { type: "SET_WHISPER_BACKEND"; backend: WhisperBackend }
+  | { type: "SET_TTS_BACKEND"; backend: TtsBackend }
   | { type: "SET_LLM_INTERFACE"; interfaceId: string }
   | { type: "SET_DEPLOYMENT_TARGET"; target: "standard" | "compose-export" }
   | { type: "SET_STORAGE_PATH"; path: string }

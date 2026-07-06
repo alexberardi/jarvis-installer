@@ -4,7 +4,7 @@ import { parseRegistry, getCoreServices, getRecommendedServices, getOptionalServ
 import { generateAllSecrets } from "@/lib/secret-generator";
 import { detectPortConflicts, buildPortEntries, serviceIdToPortVar } from "@/lib/port-utils";
 import type { ServiceRegistry, ModelOption, LlmInterfaceOption } from "@/types/service-registry";
-import type { WhisperBackend } from "@/types/wizard";
+import type { TtsBackend, WhisperBackend } from "@/types/wizard";
 
 export default function ConfigurationStep() {
   const { state, dispatch } = useWizard();
@@ -56,6 +56,7 @@ export default function ConfigurationStep() {
 
   // Whisper model options
   const whisperService = allEnabled.find((s) => s.id === "jarvis-whisper-api");
+  const ttsService = allEnabled.find((s) => s.id === "jarvis-tts");
   const modelOptions: ModelOption[] = whisperService?.modelOptions ?? [];
 
   // LLM interface options
@@ -167,6 +168,27 @@ export default function ConfigurationStep() {
             <option value="cuda">NVIDIA (CUDA)</option>
             <option value="vulkan">AMD / generic (Vulkan)</option>
             <option value="rocm">AMD (ROCm)</option>
+          </select>
+        </section>
+      )}
+
+      {/* TTS inference device (conditional) */}
+      {ttsService && (
+        <section>
+          <h3 className="mb-3 text-sm font-medium">Text-to-Speech Device</h3>
+          <p className="mb-3 text-xs text-[var(--color-text-secondary)]">
+            Where Kokoro speech synthesis runs. CPU is fine for most installs;
+            CUDA gives the fastest first-audio. On multi-GPU hosts, set
+            TTS_GPU_DEVICE in .env to pick which GPU (default 0).
+          </p>
+          <select
+            value={state.ttsBackend}
+            onChange={(e) => dispatch({ type: "SET_TTS_BACKEND", backend: e.target.value as TtsBackend })}
+            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-3 py-2 text-sm"
+            data-testid="tts-backend-select"
+          >
+            <option value="cpu">CPU (default)</option>
+            <option value="cuda">NVIDIA (CUDA)</option>
           </select>
         </section>
       )}
