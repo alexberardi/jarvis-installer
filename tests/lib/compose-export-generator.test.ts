@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateComposeExport } from "@/lib/compose-export-generator";
 import { parseRegistry } from "@/lib/service-registry";
-import { imageDigestFor } from "@/lib/image-digests";
 import { makeState } from "../helpers/make-state";
 import registryJson from "../../public/service-registry.json";
 
