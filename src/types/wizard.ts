@@ -28,6 +28,8 @@ export interface WizardState {
   whisperModel: string;
   whisperBackend: WhisperBackend;
   ttsBackend: TtsBackend;
+  /** Opt-in digest pinning. Default false: floating tags so `docker compose pull` updates. */
+  pinImages: boolean;
   llmInterface: string;
 
   // Deployment mode
@@ -61,6 +63,7 @@ export type WizardAction =
   | { type: "SET_WHISPER_MODEL"; model: string }
   | { type: "SET_WHISPER_BACKEND"; backend: WhisperBackend }
   | { type: "SET_TTS_BACKEND"; backend: TtsBackend }
+  | { type: "SET_PIN_IMAGES"; enabled: boolean }
   | { type: "SET_LLM_INTERFACE"; interfaceId: string }
   | { type: "SET_DEPLOYMENT_TARGET"; target: "standard" | "compose-export" }
   | { type: "SET_STORAGE_PATH"; path: string }

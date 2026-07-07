@@ -7,11 +7,10 @@ import registryJson from "../../public/service-registry.json";
 
 const registry = parseRegistry(registryJson);
 
-// Expected inlined image ref for the export (no ${VAR}): a digest when the map
-// pins it, else the literal track tag. Same lookup the export generator uses.
+// Expected inlined image ref for the export (no ${VAR}). Floating track tags
+// are the default (2026-07-06); digest pinning is opt-in via pinImages.
 function exportRef(base: string, suffix = "", track: "latest" | "dev" = "latest"): string {
-  const d = imageDigestFor(base, track, suffix);
-  return d ? `${base}@${d}` : `${base}:${track}${suffix}`;
+  return `${base}:${track}${suffix}`;
 }
 const WHISPER = "ghcr.io/alexberardi/jarvis-whisper-api";
 

@@ -11,12 +11,30 @@ const registry = parseRegistry(registryJson);
 // map pins it, else the floating ${JARVIS_IMAGE_TAG} tag. Computed through the
 // same lookup the generator uses, so these verify VARIANT selection and survive
 // a digest-map refresh.
-function imgRef(base: string, suffix = "", track: "latest" | "dev" = "latest"): string {
-  const d = imageDigestFor(base, track, suffix);
-  return d ? `${base}@${d}` : `${base}:\${JARVIS_IMAGE_TAG:-latest}${suffix}`;
+// Floating tags are the default (2026-07-06); pin-mode is covered separately.
+function imgRef(base: string, suffix = "", _track: "latest" | "dev" = "latest"): string {
+  return `${base}:\${JARVIS_IMAGE_TAG:-latest}${suffix}`;
 }
 const LLM = "ghcr.io/alexberardi/jarvis-llm-proxy-api";
 const WHISPER = "ghcr.io/alexberardi/jarvis-whisper-api";
+
+describe("pinImages opt-in", () => {
+  it("pins by digest only when pinImages is true", async () => {
+    const { parseRegistry } = await import("@/lib/service-registry");
+    const { generateCompose } = await import("@/lib/compose-generator");
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { makeState } = await import("../helpers/make-state");
+    const registry = parseRegistry(
+      JSON.parse(readFileSync(join(__dirname, "../../public/service-registry.json"), "utf-8")),
+    );
+    const floating = generateCompose(makeState(), registry);
+    expect(floating).not.toContain("@sha256:");
+    const pinned = generateCompose(makeState({ pinImages: true }), registry);
+    const d = imageDigestFor("ghcr.io/alexberardi/jarvis-command-center", "latest", "");
+    if (d) expect(pinned).toContain(`@${d}`);
+  });
+});
 
 describe("compose-generator", () => {
   it("generates output starting with services:", () => {

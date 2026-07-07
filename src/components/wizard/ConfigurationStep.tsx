@@ -193,6 +193,28 @@ export default function ConfigurationStep() {
         </section>
       )}
 
+      {/* Image pinning (advanced) */}
+      <section>
+        <h3 className="mb-3 text-sm font-medium">Image Updates</h3>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            checked={state.pinImages}
+            onChange={(e) => dispatch({ type: "SET_PIN_IMAGES", enabled: e.target.checked })}
+            className="mt-0.5"
+            data-testid="pin-images-checkbox"
+          />
+          <span>
+            <span className="font-medium">Pin images by digest (advanced)</span>
+            <span className="mt-1 block text-xs text-[var(--color-text-secondary)]">
+              Supply-chain hardening: locks every service to an exact build. Leave OFF
+              for normal use — when pinned, docker compose pull will never update
+              anything; updates only happen through the admin&apos;s reconcile.
+            </span>
+          </span>
+        </label>
+      </section>
+
       {/* LLM Interface */}
       {commandCenter && llmInterfaceOptions.length > 0 && (
         <section>

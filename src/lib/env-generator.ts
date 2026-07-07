@@ -86,6 +86,11 @@ export function generateEnv(state: WizardState, registry: ServiceRegistry): stri
   // pins images by digest). jarvis-admin's reconcile reconstructs its state
   // from .env; without these keys a later reconcile silently downgrades
   // whisper to the CPU image and strips TTS's GPU passthrough.
+  // Image pinning policy — read back by jarvis-admin's reconcile.
+  lines.push("# --- Image Pinning (opt-in supply-chain hardening) ---");
+  lines.push(`PIN_IMAGES=${state.pinImages ? "true" : "false"}`);
+  lines.push("");
+
   lines.push("# --- GPU Backends ---");
   lines.push(`WHISPER_BACKEND=${state.whisperBackend}`);
   lines.push(`TTS_BACKEND=${state.ttsBackend}`);

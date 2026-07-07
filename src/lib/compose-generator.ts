@@ -79,10 +79,11 @@ function getServiceImage(service: ServiceDefinition, state: WizardState): string
     suffix = variantSuffix[state.gpuType] ?? "";
   }
 
-  // Pin by digest when recorded (immune to a GHCR tag overwrite); else the
-  // floating ${JARVIS_IMAGE_TAG} tag.
+  // Floating tags by default (2026-07-06: default digest pins made
+  // `docker compose pull` inert and stranded operators on stale builds).
+  // state.pinImages opts back in to digest pinning (supply-chain hardening).
   const track = state.releaseTrack === "dev" ? "dev" : "latest";
-  const digest = imageDigestFor(baseImage, track, suffix);
+  const digest = state.pinImages ? imageDigestFor(baseImage, track, suffix) : undefined;
   if (digest) return `${baseImage}@${digest}`;
   return `${baseImage}:\${JARVIS_IMAGE_TAG:-latest}${suffix}`;
 }

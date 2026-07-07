@@ -396,10 +396,10 @@ function getExportImage(service: ServiceDefinition, state: WizardState): string 
     suffix = variantSuffix[state.gpuType] ?? "-cpu";
   }
 
-  // Export bakes values inline (no ${VAR}). Pin by digest when recorded, else the
-  // literal track tag.
+  // Export bakes values inline (no ${VAR}). Floating track tags by default
+  // (2026-07-06); state.pinImages opts back in to digest pinning.
   const track = state.releaseTrack === "dev" ? "dev" : "latest";
-  const digest = imageDigestFor(baseImage, track, suffix);
+  const digest = state.pinImages ? imageDigestFor(baseImage, track, suffix) : undefined;
   if (digest) return `${baseImage}@${digest}`;
   return `${baseImage}:${track}${suffix}`;
 }
