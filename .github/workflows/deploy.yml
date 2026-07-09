@@ -27,6 +27,11 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+        env:
+          # Public Cloudflare Web Analytics beacon token. Set as a repo
+          # VARIABLE (not secret) — empty until configured, which no-ops
+          # the beacon. See src/lib/analytics.ts.
+          VITE_CF_BEACON_TOKEN: ${{ vars.VITE_CF_BEACON_TOKEN }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
