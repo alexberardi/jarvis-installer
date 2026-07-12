@@ -121,6 +121,14 @@ describe("compose-generator", () => {
       expect(output).toContain('"${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:${REDIS_PORT:-6379}:6379"');
     });
 
+    // Loki has no auth of its own and stores voice transcripts — it was
+    // previously grouped with grafana as a "dashboard" and published on
+    // 0.0.0.0:3100. grafana + jarvis-logs reach it over the internal network.
+    it("binds loki to loopback — no auth of its own, holds transcripts", () => {
+      const output = generateCompose(makeState(), registry);
+      expect(output).toContain('"${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:${LOKI_PORT:-3100}:3100"');
+    });
+
     it("does not bind application services to loopback (they need external reach)", () => {
       const output = generateCompose(makeState(), registry);
       // command-center is the public API surface; its published port must not be

@@ -12,9 +12,16 @@ const FIRST_PARTY_PREFIX = "ghcr.io/alexberardi/";
 // containers, which reach them over the internal `jarvis` network regardless of
 // the host binding). Operators who genuinely need to expose these — e.g. a
 // remote DB client — can opt in by setting JARVIS_INFRA_BIND_HOST=0.0.0.0 in
-// their .env. Infra that legitimately serves external clients (mosquitto for
-// remote nodes, grafana/loki dashboards) is intentionally excluded.
-const DATA_PLANE_INFRA = new Set<string>(["postgres", "redis", "minio"]);
+// their .env.
+//
+// Loki belongs here: it ships NO authentication of its own, and it stores voice
+// transcripts. Grafana is the dashboard (protected by a generated admin
+// password); Loki is the raw log API behind it, reached over the internal
+// network by grafana and jarvis-logs — nothing needs it published off-host.
+//
+// Infra that legitimately serves external clients (mosquitto for remote nodes,
+// grafana dashboards in the browser) is intentionally excluded.
+const DATA_PLANE_INFRA = new Set<string>(["postgres", "redis", "minio", "loki"]);
 
 /**
  * Host-side bind prefix for a published port. Data-plane infra defaults to

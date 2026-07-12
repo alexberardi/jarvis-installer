@@ -13,6 +13,16 @@ function exportRef(base: string, suffix = "", track: "latest" | "dev" = "latest"
 }
 const WHISPER = "ghcr.io/alexberardi/jarvis-whisper-api";
 
+describe("compose-export-generator: data-plane infra host binding", () => {
+  // Loki ships no authentication and stores voice transcripts. The export path
+  // published it on 0.0.0.0:3100 even after postgres/redis were loopback-bound.
+  it("binds loki to loopback by default (overridable via JARVIS_INFRA_BIND_HOST)", () => {
+    const output = generateComposeExport(makeState(), registry);
+    expect(output).toContain('"${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:3100:3100"');
+    expect(output).not.toContain('"3100:3100"');
+  });
+});
+
 describe("compose-export-generator: worker emission", () => {
   function nvidiaState() {
     return makeState({

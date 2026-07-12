@@ -199,7 +199,10 @@ export function generateComposeExport(
     lines.push("    container_name: jarvis-loki");
     lines.push("    user: \"0\"");
     lines.push("    ports:");
-    lines.push(`      - "${lokiHostPort}:3100"`);
+    // Loki has no auth of its own and stores voice transcripts — loopback by
+    // default (override via JARVIS_INFRA_BIND_HOST), same as the other
+    // data-plane infra. Grafana/jarvis-logs reach it over the internal network.
+    lines.push(`      - "\${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:${lokiHostPort}:3100"`);
     lines.push("    volumes:");
     lines.push(`      - ${storagePath}/loki:/loki`);
     lines.push("    networks:");
