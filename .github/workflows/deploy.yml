@@ -34,7 +34,7 @@ jobs:
           # in). Empty until configured, which no-ops the beacon. See
           # src/lib/analytics.ts.
           VITE_CF_BEACON_TOKEN: ${{ vars.VITE_CF_BEACON_TOKEN || secrets.VITE_CF_BEACON_TOKEN }}
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
