@@ -46,6 +46,7 @@ describe("secret-generator", () => {
       expect(secrets.JARVIS_CONFIG_ADMIN_TOKEN).toHaveLength(64);
       expect(secrets.JARVIS_AUTH_ADMIN_TOKEN).toHaveLength(64);
       expect(secrets.ADMIN_API_KEY).toHaveLength(64);
+      expect(secrets.MODEL_SERVICE_TOKEN).toHaveLength(64);
     });
 
     it("all values are valid hex", () => {
@@ -64,6 +65,8 @@ describe("secret-generator", () => {
       expect(SECRET_KEYS).toContain("POSTGRES_PASSWORD");
       expect(SECRET_KEYS).toContain("REDIS_PASSWORD");
       expect(SECRET_KEYS).toContain("ADMIN_API_KEY");
+      expect(SECRET_KEYS).toContain("GRAFANA_ADMIN_PASSWORD");
+      expect(SECRET_KEYS).toContain("MODEL_SERVICE_TOKEN");
     });
   });
 });

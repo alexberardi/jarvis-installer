@@ -183,8 +183,10 @@ describe("service-registry", () => {
 
     it("returns empty array when no infra is needed", () => {
       const registry = parseRegistry(registryJson);
-      // tts depends only on jarvis-auth and jarvis-config-service (no infra)
-      const infra = getRequiredInfrastructure(registry, ["jarvis-tts"]);
+      // jarvis-web is a frontend — depends only on services (jarvis-auth,
+      // jarvis-command-center), with no database or infra of its own.
+      // (jarvis-tts used to be the example here, but it now has a settings DB.)
+      const infra = getRequiredInfrastructure(registry, ["jarvis-web"]);
       expect(infra).toEqual([]);
     });
   });

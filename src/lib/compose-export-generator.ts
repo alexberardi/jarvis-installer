@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import type { WizardState } from "@/types/wizard";
 import type { ServiceRegistry, ServiceDefinition, WorkerDefinition } from "@/types/service-registry";
 import { getAllEnabledServices, getInfraForServices } from "@/lib/compose-generator";
+import { imageDigestFor } from "@/lib/image-digests";
 
 interface AppKeyEntry {
   appId: string;
@@ -20,6 +21,16 @@ function generateAppKey(appId: string): AppKeyEntry {
   return { appId, rawKey, bcryptHash };
 }
 
+/** A strong random secret (base64url, ~43 chars) — well above any length guard. */
+function generateSecret(bytes = 32): string {
+  const buf = new Uint8Array(bytes);
+  crypto.getRandomValues(buf);
+  return btoa(String.fromCharCode(...buf))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
+}
+
 interface SecretsMap {
   pgPassword: string;
   redisPassword: string;
@@ -27,6 +38,9 @@ interface SecretsMap {
   configAdminToken: string;
   authAdminToken: string;
   adminApiKey: string;
+  grafanaPassword: string;
+  modelServiceToken: string;
+  mqttPassword: string;
   dbUser: string;
 }
 
@@ -56,13 +70,35 @@ export function generateComposeExport(
     appKeys.set(svc.id, generateAppKey(svc.id));
   }
 
+  // Resolve each secret to a strong value ONCE and reuse it everywhere. A wizard-
+  // provided value wins; otherwise we generate a strong random secret (never a
+  // "changeme" placeholder — which is both insecure and now rejected by services'
+  // boot-time secret guard). Memoized by ref so the same secret is identical
+  // across every service that references it (previously the SecretsMap fell back
+  // to "changeme" while the generic env loop fell back to "" — a mismatch that
+  // silently broke fleet-wide JWT validation on a partial-wizard export).
+  const resolvedSecrets = new Map<string, string>();
+  const resolveSecret = (ref: string): string => {
+    const provided = state.secrets[ref];
+    if (provided) return provided;
+    let generated = resolvedSecrets.get(ref);
+    if (!generated) {
+      generated = generateSecret();
+      resolvedSecrets.set(ref, generated);
+    }
+    return generated;
+  };
+
   const secrets: SecretsMap = {
-    pgPassword: state.secrets["POSTGRES_PASSWORD"] ?? "changeme",
-    redisPassword: state.secrets["REDIS_PASSWORD"] ?? "changeme",
-    authSecretKey: state.secrets["AUTH_SECRET_KEY"] ?? "changeme",
-    configAdminToken: state.secrets["JARVIS_CONFIG_ADMIN_TOKEN"] ?? "changeme",
-    authAdminToken: state.secrets["JARVIS_AUTH_ADMIN_TOKEN"] ?? "changeme",
-    adminApiKey: state.secrets["ADMIN_API_KEY"] ?? "changeme",
+    pgPassword: resolveSecret("POSTGRES_PASSWORD"),
+    redisPassword: resolveSecret("REDIS_PASSWORD"),
+    authSecretKey: resolveSecret("AUTH_SECRET_KEY"),
+    configAdminToken: resolveSecret("JARVIS_CONFIG_ADMIN_TOKEN"),
+    authAdminToken: resolveSecret("JARVIS_AUTH_ADMIN_TOKEN"),
+    adminApiKey: resolveSecret("ADMIN_API_KEY"),
+    grafanaPassword: resolveSecret("GRAFANA_ADMIN_PASSWORD"),
+    modelServiceToken: resolveSecret("MODEL_SERVICE_TOKEN"),
+    mqttPassword: resolveSecret("MQTT_PASSWORD"),
     dbUser: state.dbUser || "jarvis",
   };
 
@@ -163,7 +199,10 @@ export function generateComposeExport(
     lines.push("    container_name: jarvis-loki");
     lines.push("    user: \"0\"");
     lines.push("    ports:");
-    lines.push(`      - "${lokiHostPort}:3100"`);
+    // Loki has no auth of its own and stores voice transcripts — loopback by
+    // default (override via JARVIS_INFRA_BIND_HOST), same as the other
+    // data-plane infra. Grafana/jarvis-logs reach it over the internal network.
+    lines.push(`      - "\${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:${lokiHostPort}:3100"`);
     lines.push("    volumes:");
     lines.push(`      - ${storagePath}/loki:/loki`);
     lines.push("    networks:");
@@ -182,7 +221,7 @@ export function generateComposeExport(
     lines.push("    ports:");
     lines.push(`      - "${grafanaHostPort}:3000"`);
     lines.push("    environment:");
-    lines.push('      GF_SECURITY_ADMIN_PASSWORD: "jarvis"');
+    lines.push(`      GF_SECURITY_ADMIN_PASSWORD: "${secrets.grafanaPassword}"`);
     lines.push("    volumes:");
     lines.push(`      - ${storagePath}/grafana:/var/lib/grafana`);
     lines.push("    networks:");
@@ -190,26 +229,48 @@ export function generateComposeExport(
     lines.push("    restart: unless-stopped");
   }
 
-  // Mosquitto — raw MQTT (LAN) + WebSockets (external nodes via Cloudflare Tunnel)
+  // Mosquitto — raw MQTT (LAN) + WebSockets (external nodes via Cloudflare Tunnel).
+  // Auth: hash the shared MQTT credential into a password_file at startup (the
+  // generator can't produce mosquitto's $7$ PBKDF2 hash), then serve an env-driven
+  // allow_anonymous. This is a FRESH install: the command-center reads
+  // MQTT_PASSWORD from its env and every node fetches broker creds over
+  // authenticated HTTP before it opens an MQTT connection, so there is no
+  // anonymous client to strand — it defaults FALSE (locked) to close the
+  // anonymous-broker RCE window from the first boot. Set MQTT_ALLOW_ANON=true
+  // only if adopting an old fleet whose nodes predate credential auto-fetch. The
+  // password is inlined into the env (self-contained export); `$$` escapes
+  // Compose interpolation so the container shell expands the vars.
   if (infra.some((i) => i.id === "mosquitto")) {
     const mqttHostPort = state.infraPortOverrides["mosquitto"] ?? 1884;
     const mqttWsHostPort = state.infraPortOverrides["mosquitto-ws"] ?? 9883;
     lines.push("");
     lines.push("  mosquitto:");
-    lines.push("    image: eclipse-mosquitto:2");
+    lines.push("    image: eclipse-mosquitto:2.0");
     lines.push("    container_name: jarvis-mosquitto");
     lines.push("    ports:");
     lines.push(`      - "${mqttHostPort}:1883"`);
     lines.push(`      - "${mqttWsHostPort}:9001"`);
+    lines.push("    environment:");
+    lines.push('      MQTT_USERNAME: "jarvis"');
+    lines.push(`      MQTT_PASSWORD: "${secrets.mqttPassword}"`);
+    lines.push('      MQTT_ALLOW_ANON: "${MQTT_ALLOW_ANON:-false}"');
     lines.push("    command:");
     lines.push("      - sh");
     lines.push("      - -c");
     lines.push("      - |");
+    // rm -f: mosquitto_passwd -c refuses an existing file on restart (2.1+).
+    // chown: mosquitto drops privileges to the mosquitto user BEFORE reading
+    // the password file (2.0.22+/2.1 image rebuilds), so a root-owned 0600
+    // pwfile crash-loops the broker on every fresh install.
+    lines.push("        rm -f /tmp/pwfile");
+    lines.push('        mosquitto_passwd -b -c /tmp/pwfile "$$MQTT_USERNAME" "$$MQTT_PASSWORD"');
+    lines.push("        chown mosquitto:mosquitto /tmp/pwfile");
     lines.push("        echo 'listener 1883' > /tmp/mosquitto.conf");
     lines.push("        echo 'protocol mqtt' >> /tmp/mosquitto.conf");
     lines.push("        echo 'listener 9001' >> /tmp/mosquitto.conf");
     lines.push("        echo 'protocol websockets' >> /tmp/mosquitto.conf");
-    lines.push("        echo 'allow_anonymous true' >> /tmp/mosquitto.conf");
+    lines.push('        echo "allow_anonymous $$MQTT_ALLOW_ANON" >> /tmp/mosquitto.conf');
+    lines.push("        echo 'password_file /tmp/pwfile' >> /tmp/mosquitto.conf");
     lines.push("        exec mosquitto -c /tmp/mosquitto.conf -v");
     lines.push("    volumes:");
     lines.push(`      - ${storagePath}/mosquitto:/mosquitto/data`);
@@ -235,6 +296,7 @@ export function generateComposeExport(
         secrets,
         allEnabled,
         storagePath,
+        resolveSecret,
       ),
     );
     if (service.workers) {
@@ -250,6 +312,7 @@ export function generateComposeExport(
             secrets,
             allEnabled,
             storagePath,
+            resolveSecret,
           ),
         );
       }
@@ -294,6 +357,23 @@ function getContainerPort(service: ServiceDefinition): number {
  */
 const CPU_FALLBACK_GPU_VARIANTS = new Set<string>(["nvidia", "amd-rocm"]);
 
+// Whisper's variant is chosen EXPLICITLY via state.whisperBackend (default "cpu"),
+// independent of the auto-detected LLM gpuType. cpu -> plain image; cuda/vulkan/
+// rocm -> the matching published suffix. WHISPER_BACKEND_GPU maps the selection to
+// the gpuType the device emitter understands.
+const WHISPER_BACKEND_SUFFIX: Record<string, string> = {
+  cpu: "",
+  cuda: "-cuda",
+  vulkan: "-vulkan",
+  rocm: "-rocm",
+};
+const WHISPER_BACKEND_GPU: Record<string, string> = {
+  cpu: "none",
+  cuda: "nvidia",
+  vulkan: "amd",
+  rocm: "amd-rocm",
+};
+
 function shouldUseGpuVariant(service: ServiceDefinition, gpuType: string): boolean {
   if (!service.gpu) return false;
   if (service.cpuFallback && !CPU_FALLBACK_GPU_VARIANTS.has(gpuType)) return false;
@@ -301,36 +381,34 @@ function shouldUseGpuVariant(service: ServiceDefinition, gpuType: string): boole
 }
 
 function getExportImage(service: ServiceDefinition, state: WizardState): string {
-  let image = service.image;
-  const isFirstParty = image.startsWith("ghcr.io/alexberardi/");
+  const image = service.image;
+  if (!image.startsWith("ghcr.io/alexberardi/")) return image;
+  const baseImage = image.includes(":") ? image.slice(0, image.lastIndexOf(":")) : image;
 
-  // Resolve the tag based on release track (compose-export bakes values inline)
-  if (isFirstParty) {
-    const tag = state.releaseTrack === "dev" ? "dev" : "latest";
-    const baseImage = image.includes(":") ? image.slice(0, image.lastIndexOf(":")) : image;
-    image = `${baseImage}:${tag}`;
-  }
-
-  if (shouldUseGpuVariant(service, state.gpuType)) {
+  // Variant suffix: whisper's explicit backend (cpu default), else the LLM gpu variant.
+  let suffix = "";
+  if (service.id === "jarvis-whisper-api") {
+    suffix = WHISPER_BACKEND_SUFFIX[state.whisperBackend] ?? "";
+  } else if (shouldUseGpuVariant(service, state.gpuType)) {
     const variantSuffix: Record<string, string> = {
       nvidia: "-cuda",
       amd: "-vulkan",
       "amd-rocm": "-rocm",
       none: "-cpu",
     };
-    const suffix = variantSuffix[state.gpuType] ?? "-cpu";
-    image = image.includes(":") ? image + suffix : image + ":latest" + suffix;
+    suffix = variantSuffix[state.gpuType] ?? "-cpu";
   }
-  return image;
+
+  // Export bakes values inline (no ${VAR}). Floating track tags by default
+  // (2026-07-06); state.pinImages opts back in to digest pinning.
+  const track = state.releaseTrack === "dev" ? "dev" : "latest";
+  const digest = state.pinImages ? imageDigestFor(baseImage, track, suffix) : undefined;
+  if (digest) return `${baseImage}@${digest}`;
+  return `${baseImage}:${track}${suffix}`;
 }
 
-function pushExportGpuConfig(
-  lines: string[],
-  service: ServiceDefinition,
-  state: WizardState,
-): void {
-  if (!shouldUseGpuVariant(service, state.gpuType) || !state.gpuEnabled) return;
-  if (state.gpuType === "nvidia") {
+function pushGpuDevices(lines: string[], gpuType: string): void {
+  if (gpuType === "nvidia") {
     lines.push("    ipc: host");
     lines.push('    shm_size: "8gb"');
     lines.push("    deploy:");
@@ -340,7 +418,7 @@ function pushExportGpuConfig(
     lines.push("            - driver: nvidia");
     lines.push("              count: all");
     lines.push("              capabilities: [gpu]");
-  } else if (state.gpuType === "amd" || state.gpuType === "amd-rocm") {
+  } else if (gpuType === "amd" || gpuType === "amd-rocm") {
     lines.push("    devices:");
     lines.push("      - /dev/dri:/dev/dri");
     lines.push("      - /dev/kfd:/dev/kfd");
@@ -352,6 +430,56 @@ function pushExportGpuConfig(
   }
 }
 
+function pushExportGpuConfig(
+  lines: string[],
+  service: ServiceDefinition,
+  state: WizardState,
+): void {
+  // TTS: device passthrough follows the explicit ttsBackend selection (cpu
+  // default). No image variant — the stock image's torch is CUDA-capable.
+  // Pinned to a SINGLE gpu (TTS_GPU_DEVICE, default 0): `count: all` invites
+  // OOM on hosts whose GPU0 is already full of LLM+whisper.
+  if (service.id === "jarvis-tts") {
+    if (state.ttsBackend === "cuda") {
+      lines.push("    deploy:");
+      lines.push("      resources:");
+      lines.push("        reservations:");
+      lines.push("          devices:");
+      lines.push("            - driver: nvidia");
+      lines.push("              device_ids: ['${TTS_GPU_DEVICE:-0}']");
+      lines.push("              capabilities: [gpu]");
+    }
+    return;
+  }
+  // Whisper: device passthrough follows the explicit whisperBackend selection,
+  // not the auto-detected LLM gpuType. cpu -> nothing.
+  if (service.id === "jarvis-whisper-api") {
+    pushGpuDevices(lines, WHISPER_BACKEND_GPU[state.whisperBackend] ?? "none");
+    return;
+  }
+  if (!shouldUseGpuVariant(service, state.gpuType) || !state.gpuEnabled) return;
+  pushGpuDevices(lines, state.gpuType);
+}
+
+/**
+ * Env shared by the llm-proxy API container and its queue worker. Both MUST
+ * carry the SAME MODEL_SERVICE_TOKEN: the worker authenticates its calls to
+ * the model service (port 7705) with it, and the model service fails closed —
+ * every inference call 503s (with /health still green) when the token is unset.
+ */
+function pushLlmProxySharedEnv(
+  lines: string[],
+  state: WizardState,
+  secrets: SecretsMap,
+): void {
+  lines.push("      # Model service (7705) internal auth — it rejects all inference calls with 503 when unset");
+  lines.push(`      MODEL_SERVICE_TOKEN: "${secrets.modelServiceToken}"`);
+  if (state.gpuType === "amd" || state.gpuType === "amd-rocm") {
+    lines.push("      # Flash attention's HIP kernel faults natively on RDNA4 (gfx1201); false is also faster there");
+    lines.push('      JARVIS_FLASH_ATTN: "false"');
+  }
+}
+
 function generateExportServiceBlock(
   service: ServiceDefinition,
   state: WizardState,
@@ -360,6 +488,7 @@ function generateExportServiceBlock(
   secrets: SecretsMap,
   allEnabled: ServiceDefinition[],
   storagePath: string,
+  resolveSecret: (ref: string) => string,
 ): string[] {
   const lines: string[] = [];
   const hostPort = state.portOverrides[service.id] ?? service.port;
@@ -377,6 +506,10 @@ function generateExportServiceBlock(
 
   // Environment
   lines.push("    environment:");
+  // Prod deployment: opt every service into strict boot-time secret enforcement.
+  // Safe here because the export bakes strong generated secrets (above), so the
+  // guard has nothing to trip on; it protects against a later manual weakening.
+  lines.push('      JARVIS_ENV: "production"');
 
   // Discovery URL style. In a compose deployment, in-container services reach
   // shared infra registered as `localhost` (e.g. the MQTT broker) via the host —
@@ -408,7 +541,7 @@ function generateExportServiceBlock(
     if (env.name === "DATABASE_URL" || env.name === "MIGRATIONS_DATABASE_URL") continue;
 
     if (env.secretRef) {
-      const value = state.secrets[env.secretRef] ?? "";
+      const value = resolveSecret(env.secretRef);
       lines.push(`      ${env.name}: "${value}"`);
     } else if (env.default) {
       lines.push(`      ${env.name}: "${env.default}"`);
@@ -434,6 +567,11 @@ function generateExportServiceBlock(
     // localhost:1883 inside its own container and every publish 503s
     // ("MQTT not available"). Point it at the mosquitto container.
     lines.push('      JARVIS_MQTT_BROKER_URL: "mqtt://jarvis-mosquitto:1883"');
+    // Shared broker credential — the same secret the mosquitto password_file is
+    // built from. CC's get_mqtt_credentials() reads these to authenticate; it
+    // also hands them to nodes over authenticated HTTP (/mqtt-credentials).
+    lines.push('      MQTT_USERNAME: "jarvis"');
+    lines.push(`      MQTT_PASSWORD: "${secrets.mqttPassword}"`);
   }
 
   if (service.id === "jarvis-command-center" && state.llmInterface) {
@@ -468,6 +606,7 @@ function generateExportServiceBlock(
     lines.push('      JARVIS_MODEL_CHAT_FORMAT: "chatml"');
     lines.push('      JARVIS_MODEL_CONTEXT_WINDOW: "32768"');
     lines.push(`      REDIS_URL: "redis://:${secrets.redisPassword}@redis:6379/0"`);
+    pushLlmProxySharedEnv(lines, state, secrets);
   }
 
   if (service.id === "jarvis-settings-server") {
@@ -484,6 +623,12 @@ function generateExportServiceBlock(
   const nonDefaultWhisper = isWhisper && state.whisperModel !== "base.en";
   if (nonDefaultWhisper) {
     lines.push(`      WHISPER_MODEL: "/whisper-models/ggml-${state.whisperModel}.bin"`);
+  }
+
+  if (service.id === "jarvis-tts" && state.ttsBackend === "cuda") {
+    // env_fallback for a fresh install whose settings DB has no
+    // tts.kokoro_device row yet (a DB value wins once set).
+    lines.push('      TTS_KOKORO_DEVICE: "${TTS_BACKEND:-cpu}"');
   }
 
   // Migration entrypoint wrapper. Services flagged `migrate: true` in the
@@ -521,14 +666,14 @@ function generateExportServiceBlock(
       lines.push(`        ${line}`);
     }
   } else if (service.id === "jarvis-llm-proxy-api") {
-    // llm-proxy has NO image CMD, so it MUST keep a command that starts its two
-    // uvicorn services. The alembic prefix is dropped — the entrypoint migrates.
-    lines.push("    command:");
-    lines.push("      - sh");
-    lines.push("      - -c");
-    lines.push("      - |");
-    lines.push("        python -m uvicorn services.model_service:app --host 0.0.0.0 --port 7705 &");
-    lines.push(`        exec python -m uvicorn main:app --host 0.0.0.0 --port ${containerPort}`);
+    // The migrate entrypoint above clears the image CMD, so llm-proxy MUST keep
+    // an explicit command — and it MUST be the image's supervised launcher
+    // scripts/serve.sh (API in the foreground + model service respawned with
+    // backoff), NOT the old unsupervised `uvicorn model_service & exec uvicorn
+    // main` pattern: when the model service crashed natively, nothing respawned
+    // it and the API 503'd forever (2026-07-02 outage). serve.sh defaults
+    // SERVER_PORT=7704 / MODEL_SERVICE_PORT=7705, matching what we publish.
+    lines.push('    command: ["bash", "scripts/serve.sh"]');
   } else if (service.migrate) {
     // Overriding `entrypoint` CLEARS the image's CMD, so a migrate service with
     // no explicit command would `exec ""` (empty $@) and exit right after
@@ -722,6 +867,7 @@ function generateExportWorkerBlock(
   secrets: SecretsMap,
   allEnabled: ServiceDefinition[],
   storagePath: string,
+  resolveSecret: (ref: string) => string,
 ): string[] {
   const lines: string[] = [];
   const image = getExportImage(parent, state);
@@ -758,7 +904,7 @@ function generateExportWorkerBlock(
     if (env.name === "DATABASE_URL" || env.name === "MIGRATIONS_DATABASE_URL") continue;
     if (overrideKeys.has(env.name)) continue;
     if (env.secretRef) {
-      const value = state.secrets[env.secretRef] ?? "";
+      const value = resolveSecret(env.secretRef);
       lines.push(`      ${env.name}: "${value}"`);
     } else if (env.default) {
       lines.push(`      ${env.name}: "${env.default}"`);
@@ -789,6 +935,7 @@ function generateExportWorkerBlock(
     for (const [key, val] of llmProxyEnv) {
       if (!overrideKeys.has(key)) lines.push(`      ${key}: ${val}`);
     }
+    pushLlmProxySharedEnv(lines, state, secrets);
   }
 
   for (const [key, val] of Object.entries(overrides)) {

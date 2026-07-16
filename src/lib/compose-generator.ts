@@ -2,6 +2,7 @@ import type { WizardState } from "@/types/wizard";
 import type { ServiceRegistry, ServiceDefinition, InfrastructureDefinition, WorkerDefinition } from "@/types/service-registry";
 import { getCoreServices, getRecommendedServices, getOptionalServices, getRequiredInfrastructure } from "@/lib/service-registry";
 import { serviceIdToPortVar } from "@/lib/port-utils";
+import { imageDigestFor } from "@/lib/image-digests";
 
 const FIRST_PARTY_PREFIX = "ghcr.io/alexberardi/";
 
@@ -11,9 +12,16 @@ const FIRST_PARTY_PREFIX = "ghcr.io/alexberardi/";
 // containers, which reach them over the internal `jarvis` network regardless of
 // the host binding). Operators who genuinely need to expose these — e.g. a
 // remote DB client — can opt in by setting JARVIS_INFRA_BIND_HOST=0.0.0.0 in
-// their .env. Infra that legitimately serves external clients (mosquitto for
-// remote nodes, grafana/loki dashboards) is intentionally excluded.
-const DATA_PLANE_INFRA = new Set<string>(["postgres", "redis", "minio"]);
+// their .env.
+//
+// Loki belongs here: it ships NO authentication of its own, and it stores voice
+// transcripts. Grafana is the dashboard (protected by a generated admin
+// password); Loki is the raw log API behind it, reached over the internal
+// network by grafana and jarvis-logs — nothing needs it published off-host.
+//
+// Infra that legitimately serves external clients (mosquitto for remote nodes,
+// grafana dashboards in the browser) is intentionally excluded.
+const DATA_PLANE_INFRA = new Set<string>(["postgres", "redis", "minio", "loki"]);
 
 /**
  * Host-side bind prefix for a published port. Data-plane infra defaults to
@@ -25,9 +33,25 @@ function infraBindPrefix(infraId: string): string {
 }
 
 // GPU types we publish image variants for on `cpuFallback` services.
-// Other GPU types (amd Vulkan, none) fall back to the plain CPU image
-// since whisper only ships -cuda / -rocm builds.
+// llm-proxy variant fallback: GPU types NOT in this set use the plain image.
+// (Whisper no longer keys off this — its variant is chosen via whisperBackend.)
 const CPU_FALLBACK_GPU_VARIANTS = new Set<string>(["nvidia", "amd-rocm"]);
+
+// Whisper's variant is chosen EXPLICITLY via state.whisperBackend (default "cpu"),
+// independent of the auto-detected LLM gpuType. WHISPER_BACKEND_GPU maps the
+// selection to the gpuType the device emitter understands.
+const WHISPER_BACKEND_SUFFIX: Record<string, string> = {
+  cpu: "",
+  cuda: "-cuda",
+  vulkan: "-vulkan",
+  rocm: "-rocm",
+};
+const WHISPER_BACKEND_GPU: Record<string, string> = {
+  cpu: "none",
+  cuda: "nvidia",
+  vulkan: "amd",
+  rocm: "amd-rocm",
+};
 
 function shouldUseGpuVariant(service: ServiceDefinition, gpuType: string): boolean {
   if (!service.gpu) return false;
@@ -48,27 +72,31 @@ function getServiceImage(service: ServiceDefinition, state: WizardState): string
   if (!image.startsWith(FIRST_PARTY_PREFIX)) return image;
   const baseImage = image.includes(":") ? image.slice(0, image.lastIndexOf(":")) : image;
 
-  let gpuSuffix = "";
-  if (shouldUseGpuVariant(service, state.gpuType)) {
+  // Variant suffix: whisper's explicit backend (cpu default), else the LLM gpu variant.
+  let suffix = "";
+  if (service.id === "jarvis-whisper-api") {
+    suffix = WHISPER_BACKEND_SUFFIX[state.whisperBackend] ?? "";
+  } else if (shouldUseGpuVariant(service, state.gpuType)) {
     const variantSuffix: Record<string, string> = {
       nvidia: "-cuda",
       amd: "-vulkan",
       "amd-rocm": "-rocm",
       none: "-cpu",
     };
-    gpuSuffix = variantSuffix[state.gpuType] ?? "";
+    suffix = variantSuffix[state.gpuType] ?? "";
   }
 
-  return `${baseImage}:\${JARVIS_IMAGE_TAG:-latest}${gpuSuffix}`;
+  // Floating tags by default (2026-07-06: default digest pins made
+  // `docker compose pull` inert and stranded operators on stale builds).
+  // state.pinImages opts back in to digest pinning (supply-chain hardening).
+  const track = state.releaseTrack === "dev" ? "dev" : "latest";
+  const digest = state.pinImages ? imageDigestFor(baseImage, track, suffix) : undefined;
+  if (digest) return `${baseImage}@${digest}`;
+  return `${baseImage}:\${JARVIS_IMAGE_TAG:-latest}${suffix}`;
 }
 
-function pushGpuConfig(
-  lines: string[],
-  service: ServiceDefinition,
-  state: WizardState,
-): void {
-  if (!shouldUseGpuVariant(service, state.gpuType) || !state.gpuEnabled) return;
-  if (state.gpuType === "nvidia") {
+function pushGpuDevices(lines: string[], gpuType: string): void {
+  if (gpuType === "nvidia") {
     lines.push("    ipc: host");
     lines.push('    shm_size: "8gb"');
     lines.push("    deploy:");
@@ -78,7 +106,7 @@ function pushGpuConfig(
     lines.push("            - driver: nvidia");
     lines.push("              count: all");
     lines.push("              capabilities: [gpu]");
-  } else if (state.gpuType === "amd" || state.gpuType === "amd-rocm") {
+  } else if (gpuType === "amd" || gpuType === "amd-rocm") {
     lines.push("    devices:");
     lines.push("      - /dev/dri:/dev/dri");
     lines.push("      - /dev/kfd:/dev/kfd");
@@ -87,6 +115,52 @@ function pushGpuConfig(
     lines.push("    group_add:");
     lines.push("      - video");
     lines.push("      - render");
+  }
+}
+
+function pushGpuConfig(
+  lines: string[],
+  service: ServiceDefinition,
+  state: WizardState,
+): void {
+  // TTS: device passthrough follows the explicit ttsBackend selection (cpu
+  // default). No image variant — the stock image's torch is CUDA-capable.
+  // Pinned to a SINGLE gpu (TTS_GPU_DEVICE, default 0): `count: all` invites
+  // OOM on hosts whose GPU0 is already full of LLM+whisper.
+  if (service.id === "jarvis-tts") {
+    if (state.ttsBackend === "cuda") {
+      lines.push("    deploy:");
+      lines.push("      resources:");
+      lines.push("        reservations:");
+      lines.push("          devices:");
+      lines.push("            - driver: nvidia");
+      lines.push("              device_ids: ['${TTS_GPU_DEVICE:-0}']");
+      lines.push("              capabilities: [gpu]");
+    }
+    return;
+  }
+  // Whisper: device passthrough follows the explicit whisperBackend selection,
+  // not the auto-detected LLM gpuType. cpu -> nothing.
+  if (service.id === "jarvis-whisper-api") {
+    pushGpuDevices(lines, WHISPER_BACKEND_GPU[state.whisperBackend] ?? "none");
+    return;
+  }
+  if (!shouldUseGpuVariant(service, state.gpuType) || !state.gpuEnabled) return;
+  pushGpuDevices(lines, state.gpuType);
+}
+
+/**
+ * Env shared by the llm-proxy API container and its queue worker. Both MUST
+ * carry the SAME MODEL_SERVICE_TOKEN: the worker authenticates its calls to
+ * the model service (port 7705) with it, and the model service fails closed —
+ * every inference call 503s (with /health still green) when the token is unset.
+ */
+function pushLlmProxySharedEnv(lines: string[], state: WizardState): void {
+  lines.push("      # Model service (7705) internal auth — it rejects all inference calls with 503 when unset");
+  lines.push("      MODEL_SERVICE_TOKEN: ${MODEL_SERVICE_TOKEN}");
+  if (state.gpuType === "amd" || state.gpuType === "amd-rocm") {
+    lines.push("      # Flash attention's HIP kernel faults natively on RDNA4 (gfx1201); false is also faster there");
+    lines.push('      JARVIS_FLASH_ATTN: "false"');
   }
 }
 
@@ -295,10 +369,20 @@ function generateServiceBlock(
   if (nonDefaultWhisper) {
     lines.push(`      WHISPER_MODEL: /whisper-models/ggml-${state.whisperModel}.bin`);
   }
+  if (service.id === "jarvis-tts" && state.ttsBackend === "cuda") {
+    // env_fallback for a fresh install whose settings DB has no
+    // tts.kokoro_device row yet (a DB value wins once set).
+    lines.push("      TTS_KOKORO_DEVICE: ${TTS_BACKEND:-cpu}");
+  }
+
 
   // LLM interface seed for command-center
   if (service.id === "jarvis-command-center" && state.llmInterface) {
     lines.push(`      LLM_INTERFACE_SEED: ${state.llmInterface}`);
+  }
+
+  if (service.id === "jarvis-llm-proxy-api") {
+    pushLlmProxySharedEnv(lines, state);
   }
 
   // Dependencies
@@ -385,6 +469,10 @@ function generateWorkerBlock(
   }
   for (const [key, val] of Object.entries(overrides)) {
     lines.push(`      ${key}: ${val}`);
+  }
+
+  if (parent.id === "jarvis-llm-proxy-api") {
+    pushLlmProxySharedEnv(lines, state);
   }
 
   lines.push(`    command: ${worker.command}`);

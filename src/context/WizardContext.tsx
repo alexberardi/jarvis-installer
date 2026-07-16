@@ -12,6 +12,9 @@ const initialState: WizardState = {
   secrets: {},
   dbUser: "jarvis",
   whisperModel: "base.en",
+  whisperBackend: "cpu",
+  ttsBackend: "cpu",
+  pinImages: false,
   llmInterface: "Qwen25MediumUntrained",
   deploymentTarget: "standard",
   storagePath: "/var/lib/jarvis",
@@ -69,6 +72,12 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
       return { ...state, dbUser: action.user };
     case "SET_WHISPER_MODEL":
       return { ...state, whisperModel: action.model };
+    case "SET_WHISPER_BACKEND":
+      return { ...state, whisperBackend: action.backend };
+    case "SET_TTS_BACKEND":
+      return { ...state, ttsBackend: action.backend };
+    case "SET_PIN_IMAGES":
+      return { ...state, pinImages: action.enabled };
     case "SET_LLM_INTERFACE":
       return { ...state, llmInterface: action.interfaceId };
     case "SET_DEPLOYMENT_TARGET":

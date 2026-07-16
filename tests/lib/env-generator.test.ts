@@ -28,6 +28,7 @@ describe("env-generator", () => {
     expect(env).toContain("AUTH_SECRET_KEY=" + "a".repeat(64));
     expect(env).toContain("POSTGRES_PASSWORD=" + "e".repeat(32));
     expect(env).toContain("REDIS_PASSWORD=" + "f".repeat(32));
+    expect(env).toContain("MODEL_SERVICE_TOKEN=" + "9".repeat(64));
   });
 
   it("includes DB_USER", () => {
@@ -141,6 +142,29 @@ describe("env-generator", () => {
     it("includes release track section comment", () => {
       const env = generateEnv(makeState(), registry);
       expect(env).toContain("# --- Release Track ---");
+    });
+  });
+
+  describe("GPU backends", () => {
+    // The .env keys are the only durable record of the backend choices —
+    // jarvis-admin's reconcile reconstructs state from .env, and without
+    // them a later reconcile silently downgrades whisper/TTS to CPU
+    // (prod incidents 2026-07-04 and 2026-07-06).
+    it("persists whisper and tts backends", () => {
+      const env = generateEnv(
+        makeState({ whisperBackend: "cuda", ttsBackend: "cuda" }),
+        registry,
+      );
+      expect(env).toContain("WHISPER_BACKEND=cuda");
+      expect(env).toContain("TTS_BACKEND=cuda");
+      expect(env).toContain("TTS_GPU_DEVICE=0");
+    });
+
+    it("defaults both to cpu with no GPU index line", () => {
+      const env = generateEnv(makeState(), registry);
+      expect(env).toContain("WHISPER_BACKEND=cpu");
+      expect(env).toContain("TTS_BACKEND=cpu");
+      expect(env).not.toContain("TTS_GPU_DEVICE");
     });
   });
 });

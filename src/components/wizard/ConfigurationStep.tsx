@@ -4,6 +4,7 @@ import { parseRegistry, getCoreServices, getRecommendedServices, getOptionalServ
 import { generateAllSecrets } from "@/lib/secret-generator";
 import { detectPortConflicts, buildPortEntries, serviceIdToPortVar } from "@/lib/port-utils";
 import type { ServiceRegistry, ModelOption, LlmInterfaceOption } from "@/types/service-registry";
+import type { TtsBackend, WhisperBackend } from "@/types/wizard";
 
 export default function ConfigurationStep() {
   const { state, dispatch } = useWizard();
@@ -55,6 +56,7 @@ export default function ConfigurationStep() {
 
   // Whisper model options
   const whisperService = allEnabled.find((s) => s.id === "jarvis-whisper-api");
+  const ttsService = allEnabled.find((s) => s.id === "jarvis-tts");
   const modelOptions: ModelOption[] = whisperService?.modelOptions ?? [];
 
   // LLM interface options
@@ -146,6 +148,72 @@ export default function ConfigurationStep() {
           )}
         </section>
       )}
+
+      {/* Whisper GPU backend (conditional) */}
+      {whisperService && (
+        <section>
+          <h3 className="mb-3 text-sm font-medium">Whisper GPU Backend</h3>
+          <p className="mb-3 text-xs text-[var(--color-text-secondary)]">
+            Where speech-to-text runs. CPU is fast for the default base.en model and
+            leaves the GPU free for the LLM; pick a GPU backend only if you want Whisper
+            on the GPU.
+          </p>
+          <select
+            value={state.whisperBackend}
+            onChange={(e) => dispatch({ type: "SET_WHISPER_BACKEND", backend: e.target.value as WhisperBackend })}
+            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-3 py-2 text-sm"
+            data-testid="whisper-backend-select"
+          >
+            <option value="cpu">CPU (default)</option>
+            <option value="cuda">NVIDIA (CUDA)</option>
+            <option value="vulkan">AMD / generic (Vulkan)</option>
+            <option value="rocm">AMD (ROCm)</option>
+          </select>
+        </section>
+      )}
+
+      {/* TTS inference device (conditional) */}
+      {ttsService && (
+        <section>
+          <h3 className="mb-3 text-sm font-medium">Text-to-Speech Device</h3>
+          <p className="mb-3 text-xs text-[var(--color-text-secondary)]">
+            Where Kokoro speech synthesis runs. CPU is fine for most installs;
+            CUDA gives the fastest first-audio. On multi-GPU hosts, set
+            TTS_GPU_DEVICE in .env to pick which GPU (default 0).
+          </p>
+          <select
+            value={state.ttsBackend}
+            onChange={(e) => dispatch({ type: "SET_TTS_BACKEND", backend: e.target.value as TtsBackend })}
+            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-3 py-2 text-sm"
+            data-testid="tts-backend-select"
+          >
+            <option value="cpu">CPU (default)</option>
+            <option value="cuda">NVIDIA (CUDA)</option>
+          </select>
+        </section>
+      )}
+
+      {/* Image pinning (advanced) */}
+      <section>
+        <h3 className="mb-3 text-sm font-medium">Image Updates</h3>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            checked={state.pinImages}
+            onChange={(e) => dispatch({ type: "SET_PIN_IMAGES", enabled: e.target.checked })}
+            className="mt-0.5"
+            data-testid="pin-images-checkbox"
+          />
+          <span>
+            <span className="font-medium">Pin images by digest (advanced)</span>
+            <span className="mt-1 block text-xs text-[var(--color-text-secondary)]">
+              Supply-chain hardening: locks every service to an exact build. Leave OFF
+              for normal use — when pinned, docker compose pull will never update
+              anything; updates only happen through the admin&apos;s reconcile.
+            </span>
+          </span>
+        </label>
+      </section>
 
       {/* LLM Interface */}
       {commandCenter && llmInterfaceOptions.length > 0 && (

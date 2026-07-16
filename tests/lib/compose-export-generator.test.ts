@@ -6,6 +6,23 @@ import registryJson from "../../public/service-registry.json";
 
 const registry = parseRegistry(registryJson);
 
+// Expected inlined image ref for the export (no ${VAR}). Floating track tags
+// are the default (2026-07-06); digest pinning is opt-in via pinImages.
+function exportRef(base: string, suffix = "", track: "latest" | "dev" = "latest"): string {
+  return `${base}:${track}${suffix}`;
+}
+const WHISPER = "ghcr.io/alexberardi/jarvis-whisper-api";
+
+describe("compose-export-generator: data-plane infra host binding", () => {
+  // Loki ships no authentication and stores voice transcripts. The export path
+  // published it on 0.0.0.0:3100 even after postgres/redis were loopback-bound.
+  it("binds loki to loopback by default (overridable via JARVIS_INFRA_BIND_HOST)", () => {
+    const output = generateComposeExport(makeState(), registry);
+    expect(output).toContain('"${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:3100:3100"');
+    expect(output).not.toContain('"3100:3100"');
+  });
+});
+
 describe("compose-export-generator: worker emission", () => {
   function nvidiaState() {
     return makeState({
@@ -67,66 +84,89 @@ describe("compose-export-generator: worker emission", () => {
   });
 });
 
-describe("compose-export-generator: cpuFallback (whisper)", () => {
-  function whisperState(gpuType: "nvidia" | "amd" | "amd-rocm" | "none", gpuEnabled = true) {
-    return makeState({ gpuEnabled, gpuType, enabledModules: ["jarvis-whisper-api"] });
+describe("compose-export-generator: whisper backend selection", () => {
+  // Whisper's variant is chosen EXPLICITLY via whisperBackend (default cpu),
+  // independent of the auto-detected LLM gpuType.
+  function whisperState(whisperBackend: "cpu" | "cuda" | "vulkan" | "rocm") {
+    return makeState({ whisperBackend, enabledModules: ["jarvis-whisper-api"] });
+  }
+  function whisperBlock(output: string): string {
+    const start = output.search(/\n {2}jarvis-whisper-api:\n/);
+    const block = output.slice(start + 1);
+    const end = block.slice(1).search(/\n {2}[a-z][a-z0-9-]*:\n/);
+    return end > 0 ? block.slice(0, end + 1) : block;
   }
 
-  it("uses -cuda variant on NVIDIA hosts", () => {
-    const output = generateComposeExport(whisperState("nvidia"), registry);
-    expect(output).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest-cuda");
+  it("cpu (default): plain image, no GPU passthrough", () => {
+    const w = whisperBlock(generateComposeExport(whisperState("cpu"), registry));
+    expect(w).toContain("image: " + exportRef(WHISPER, ""));
+    expect(w).not.toContain("-vulkan");
+    expect(w).not.toContain("-cuda");
+    expect(w).not.toContain("/dev/dri");
+    expect(w).not.toContain("driver: nvidia");
   });
 
-  it("uses -rocm variant on AMD ROCm hosts", () => {
-    const output = generateComposeExport(whisperState("amd-rocm"), registry);
-    expect(output).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest-rocm");
+  it("vulkan: -vulkan image + /dev/dri + render group", () => {
+    const w = whisperBlock(generateComposeExport(whisperState("vulkan"), registry));
+    expect(w).toContain("image: " + exportRef(WHISPER, "-vulkan"));
+    expect(w).toContain("/dev/dri:/dev/dri");
+    expect(w).toContain("- render");
   });
 
-  it("falls back to plain CPU image on AMD Vulkan hosts (no -vulkan tag published)", () => {
-    const output = generateComposeExport(whisperState("amd"), registry);
-    const blockStart = output.search(/\n {2}jarvis-whisper-api:\n/);
-    const block = output.slice(blockStart + 1);
-    const blockEnd = block.slice(1).search(/\n {2}[a-z][a-z0-9-]*:\n/);
-    const whisperOnly = blockEnd > 0 ? block.slice(0, blockEnd + 1) : block;
-    expect(whisperOnly).toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest");
-    expect(whisperOnly).not.toContain("image: ghcr.io/alexberardi/jarvis-whisper-api:latest-vulkan");
-    expect(whisperOnly).not.toContain("driver: nvidia");
+  it("rocm: -rocm image + /dev/dri + /dev/kfd", () => {
+    const w = whisperBlock(generateComposeExport(whisperState("rocm"), registry));
+    expect(w).toContain("image: " + exportRef(WHISPER, "-rocm"));
+    expect(w).toContain("/dev/dri:/dev/dri");
+    expect(w).toContain("/dev/kfd:/dev/kfd");
+  });
+
+  it("cuda: -cuda image + nvidia deploy block", () => {
+    const w = whisperBlock(generateComposeExport(whisperState("cuda"), registry));
+    expect(w).toContain("image: " + exportRef(WHISPER, "-cuda"));
+    expect(w).toContain("driver: nvidia");
+  });
+
+  it("is independent of the LLM gpuType (amd LLM + cpu whisper -> plain whisper)", () => {
+    const w = whisperBlock(
+      generateComposeExport(
+        makeState({ gpuType: "amd", gpuEnabled: true, whisperBackend: "cpu", enabledModules: ["jarvis-whisper-api"] }),
+        registry,
+      ),
+    );
+    expect(w).toContain("image: " + exportRef(WHISPER, ""));
+    expect(w).not.toContain("/dev/dri");
   });
 
   it("does NOT mount the models volume on whisper", () => {
-    const output = generateComposeExport(whisperState("nvidia"), registry);
-    const blockStart = output.search(/\n {2}jarvis-whisper-api:\n/);
-    const block = output.slice(blockStart + 1);
-    const blockEnd = block.slice(1).search(/\n {2}[a-z][a-z0-9-]*:\n/);
-    const whisperOnly = blockEnd > 0 ? block.slice(0, blockEnd + 1) : block;
-    expect(whisperOnly).not.toContain("/models:/app/.models");
+    const w = whisperBlock(generateComposeExport(whisperState("cpu"), registry));
+    expect(w).not.toContain("/models:/app/.models");
   });
 
   it("still mounts models volume on llm-proxy (modelVolume: true)", () => {
-    const output = generateComposeExport(whisperState("nvidia"), registry);
+    const output = generateComposeExport(whisperState("cpu"), registry);
     expect(output).toContain("/models:/app/.models");
   });
 });
 
 describe("compose-export-generator: release track", () => {
-  it("uses :latest tag when releaseTrack is stable", () => {
+  it("pins the stable (latest) track for first-party images", () => {
     const output = generateComposeExport(makeState({ releaseTrack: "stable" }), registry);
-    expect(output).toContain("ghcr.io/alexberardi/jarvis-auth:latest");
-    expect(output).toContain("ghcr.io/alexberardi/jarvis-command-center:latest");
+    expect(output).toContain(exportRef("ghcr.io/alexberardi/jarvis-auth", "", "latest"));
+    expect(output).toContain(exportRef("ghcr.io/alexberardi/jarvis-command-center", "", "latest"));
   });
 
-  it("uses :dev tag when releaseTrack is dev", () => {
+  it("pins the dev track for first-party images", () => {
     const output = generateComposeExport(makeState({ releaseTrack: "dev" }), registry);
-    expect(output).toContain("ghcr.io/alexberardi/jarvis-auth:dev");
-    expect(output).toContain("ghcr.io/alexberardi/jarvis-command-center:dev");
+    expect(output).toContain(exportRef("ghcr.io/alexberardi/jarvis-auth", "", "dev"));
+    expect(output).toContain(exportRef("ghcr.io/alexberardi/jarvis-command-center", "", "dev"));
   });
 
-  it("uses :dev-cuda for GPU services on dev track with nvidia", () => {
+  it("selects the dev-cuda variant for whisper when whisperBackend=cuda on the dev track", () => {
     const output = generateComposeExport(
-      makeState({ releaseTrack: "dev", gpuEnabled: true, gpuType: "nvidia", enabledModules: ["jarvis-whisper-api"] }),
+      makeState({ releaseTrack: "dev", whisperBackend: "cuda", enabledModules: ["jarvis-whisper-api"] }),
       registry,
     );
-    expect(output).toContain("ghcr.io/alexberardi/jarvis-whisper-api:dev-cuda");
+    expect(output).toContain(exportRef(WHISPER, "-cuda", "dev"));
   });
 
   it("does not apply release track to infrastructure images", () => {
@@ -306,6 +346,40 @@ describe("compose-export-generator: config-service seed external coords", () => 
   });
 });
 
+describe("compose-export-generator: MQTT broker auth", () => {
+  it("mosquitto builds a password_file from the shared credential at startup", () => {
+    // The generator can't produce mosquitto's $7$ PBKDF2 hash, so the container
+    // runs mosquitto_passwd at startup and points the broker at the result.
+    const m = serviceBlock(generateComposeExport(makeState(), registry), "mosquitto");
+    expect(m).toContain("mosquitto_passwd -b -c /tmp/pwfile");
+    expect(m).toContain("password_file /tmp/pwfile");
+  });
+
+  it("mosquitto allow_anonymous is env-driven, defaulting FALSE (fresh installs lock the broker)", () => {
+    // A fresh install has no un-migrated fleet: the CC reads MQTT_PASSWORD and
+    // every node fetches broker creds over authenticated HTTP before connecting,
+    // so the broker locks from the first boot (closes the anonymous-broker RCE
+    // window). MQTT_ALLOW_ANON=true re-opens it only when adopting an old fleet.
+    // $$ escapes Compose interpolation so the container shell expands the env var.
+    const m = serviceBlock(generateComposeExport(makeState(), registry), "mosquitto");
+    expect(m).toContain('MQTT_ALLOW_ANON: "${MQTT_ALLOW_ANON:-false}"');
+    expect(m).toContain("allow_anonymous $$MQTT_ALLOW_ANON");
+  });
+
+  it("mosquitto + command-center share the SAME inlined MQTT password (else CC can't auth)", () => {
+    const output = generateComposeExport(makeState(), registry);
+    const m = serviceBlock(output, "mosquitto");
+    const cc = serviceBlock(output, "jarvis-command-center");
+    const pw = m.match(/MQTT_PASSWORD: "([^"]+)"/)?.[1];
+    expect(pw).toBeTruthy();
+    expect(pw).not.toBe("changeme");
+    // Memoized resolveSecret guarantees both references resolve identically.
+    expect(cc).toContain(`MQTT_PASSWORD: "${pw}"`);
+    expect(m).toContain('MQTT_USERNAME: "jarvis"');
+    expect(cc).toContain('MQTT_USERNAME: "jarvis"');
+  });
+});
+
 // Grab a single service's YAML block, anchored on its "  <id>:" header. Shared
 // helper so the migrate-entrypoint suite can isolate per-service blocks.
 function serviceBlock(output: string, id: string): string {
@@ -326,8 +400,9 @@ function alembicCount(block: string): number {
 describe("compose-export-generator: migrate entrypoint wrapper", () => {
   // Every service the registry flags `migrate: true` must boot through the
   // entrypoint wrapper that runs `alembic upgrade head` then execs the image CMD.
-  // logs/tts are intentionally deferred from the migrate set: their images don't
-  // ship alembic and their prod DBs are un-stamped — they need separate wiring.
+  // jarvis-tts now ships alembic in its image and has DATABASE_URL wired, so it
+  // joins the migrate set (its settings writes 500'd fleet-wide without it).
+  // jarvis-logs stays deferred — its image doesn't ship alembic yet.
   const MIGRATE_SET = [
     "jarvis-config-service",
     "jarvis-auth",
@@ -335,6 +410,7 @@ describe("compose-export-generator: migrate entrypoint wrapper", () => {
     "jarvis-whisper-api",
     "jarvis-llm-proxy-api",
     "jarvis-notifications",
+    "jarvis-tts",
   ];
 
   // Enable every migrate-set service so each block is present in the output.
@@ -397,16 +473,19 @@ describe("compose-export-generator: migrate entrypoint wrapper", () => {
     expect(block).toContain('"uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7706"');
   });
 
-  it("llm-proxy keeps its dual-uvicorn command but drops the alembic prefix", () => {
+  it("llm-proxy runs the supervised scripts/serve.sh launcher, not raw dual-uvicorn", () => {
     const output = generateComposeExport(fullState(), registry);
     const block = serviceBlock(output, "jarvis-llm-proxy-api");
     expect(block).toContain("entrypoint:");
-    // dual-uvicorn command still present (no image CMD to fall through to)
-    expect(block).toContain(
-      "python -m uvicorn services.model_service:app --host 0.0.0.0 --port 7705 &",
-    );
-    expect(block).toContain("exec python -m uvicorn main:app --host 0.0.0.0 --port 7704");
-    // but the leading migrate is gone — alembic appears only in the entrypoint
+    // The migrate entrypoint clears the image CMD, so an explicit command is
+    // still required — and it MUST be the image's supervised launcher, which
+    // respawns the model service with backoff when it dies.
+    expect(block).toContain('    command: ["bash", "scripts/serve.sh"]');
+    // The old unsupervised pattern is the 2026-07-02 outage signature: the
+    // model service crashes, nothing respawns it, the API 503s forever.
+    expect(block).not.toContain("uvicorn services.model_service:app");
+    expect(block).not.toContain("exec python -m uvicorn main:app");
+    // alembic appears only in the entrypoint, not duplicated in the command
     expect(alembicCount(block)).toBe(1);
   });
 });
@@ -527,6 +606,59 @@ describe("compose-export-generator: migrate-entrypoint INVARIANT", () => {
       offenders,
       `services with the migrate entrypoint but NO command (they exec "" and exit after migrating): ${offenders.join(", ")}`,
     ).toEqual([]);
+  });
+});
+
+describe("compose-export-generator: llm-proxy MODEL_SERVICE_TOKEN + AMD flash-attn", () => {
+  const tokenOf = (output: string, id: string): string => {
+    const match = serviceBlock(output, id).match(/MODEL_SERVICE_TOKEN: "([^"]*)"/);
+    if (!match) throw new Error(`MODEL_SERVICE_TOKEN not found in ${id} block`);
+    return match[1]!;
+  };
+
+  it("inlines MODEL_SERVICE_TOKEN with an IDENTICAL value in the API and worker blocks", () => {
+    const output = generateComposeExport(makeState(), registry);
+    // Model service fails closed since llm-proxy 55d2431: unset token = 503 on
+    // every inference call while /health stays green. The worker calls the model
+    // service on 7705, so both containers MUST carry the same value.
+    const apiToken = tokenOf(output, "jarvis-llm-proxy-api");
+    const workerToken = tokenOf(output, "llm-proxy-worker");
+    expect(apiToken).toBe("9".repeat(64));
+    expect(workerToken).toBe(apiToken);
+  });
+
+  it("token is non-empty", () => {
+    const output = generateComposeExport(makeState(), registry);
+    expect(tokenOf(output, "jarvis-llm-proxy-api").length).toBeGreaterThan(0);
+  });
+
+  it.each(["amd", "amd-rocm"] as const)(
+    "emits JARVIS_FLASH_ATTN=false on API + worker for %s GPUs",
+    (gpuType) => {
+      const output = generateComposeExport(makeState({ gpuType, gpuEnabled: true }), registry);
+      expect(serviceBlock(output, "jarvis-llm-proxy-api")).toContain(
+        'JARVIS_FLASH_ATTN: "false"',
+      );
+      expect(serviceBlock(output, "llm-proxy-worker")).toContain(
+        'JARVIS_FLASH_ATTN: "false"',
+      );
+    },
+  );
+
+  it("does NOT emit JARVIS_FLASH_ATTN for nvidia (definition default true is correct)", () => {
+    const output = generateComposeExport(
+      makeState({ gpuType: "nvidia", gpuEnabled: true }),
+      registry,
+    );
+    expect(output).not.toContain("JARVIS_FLASH_ATTN");
+  });
+
+  it("does NOT emit JARVIS_FLASH_ATTN for cpu-only installs", () => {
+    const output = generateComposeExport(
+      makeState({ gpuType: "none", gpuEnabled: false }),
+      registry,
+    );
+    expect(output).not.toContain("JARVIS_FLASH_ATTN");
   });
 });
 
