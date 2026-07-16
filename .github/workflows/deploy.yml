@@ -78,7 +78,7 @@ jobs:
         run: docker compose -f "$GEN_FILE" -f "$OVERRIDE_FILE" config -q && echo "compose valid"
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
