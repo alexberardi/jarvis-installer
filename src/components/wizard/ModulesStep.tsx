@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useWizard } from "@/context/WizardContext";
-import { parseRegistry, getCoreServices, getRecommendedServices } from "@/lib/service-registry";
+import { parseRegistry, getCoreServices, getRecommendedServices, getOptionalServices } from "@/lib/service-registry";
 import { resolveModuleToggle } from "@/lib/dependency-resolver";
 import type { ServiceRegistry, ServiceDefinition } from "@/types/service-registry";
 
@@ -31,6 +31,9 @@ export default function ModulesStep() {
 
   const coreServices = getCoreServices(registry);
   const recommendedServices = getRecommendedServices(registry);
+  // Optional services are deliberately NOT auto-enabled on first load —
+  // they're off-by-default power features (phone calls, etc.).
+  const optionalServices = getOptionalServices(registry);
 
   function handleToggle(serviceId: string, enabled: boolean) {
     const isCoreService = coreServices.some((s) => s.id === serviceId);
@@ -120,6 +123,30 @@ export default function ModulesStep() {
           </h3>
           <div className="space-y-2">
             {recommendedServices.map((service) => (
+              <ServiceCard
+                key={service.id}
+                service={service}
+                enabled={state.enabledModules.includes(service.id)}
+                onToggle={(enabled) => handleToggle(service.id, enabled)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Optional services — off by default; can also be added later from the
+          admin's Sync Compose page */}
+      {optionalServices.length > 0 && (
+        <div data-testid="optional-services">
+          <h3 className="mb-3 text-sm font-medium text-[var(--color-text-secondary)]">
+            Optional Services
+          </h3>
+          <p className="mb-3 text-xs text-[var(--color-text-secondary)]">
+            Off by default. You can also add these later from the admin
+            dashboard&apos;s Sync Compose page.
+          </p>
+          <div className="space-y-2">
+            {optionalServices.map((service) => (
               <ServiceCard
                 key={service.id}
                 service={service}

@@ -68,3 +68,26 @@ describe("ModulesStep", () => {
     expect(toggle).toHaveAttribute("aria-checked", "false");
   });
 });
+
+describe("ModulesStep optional services", () => {
+  it("renders the optional section with the phone gateway toggle", async () => {
+    renderModulesStep();
+    const optionalSection = await screen.findByTestId("optional-services");
+    expect(optionalSection).toBeInTheDocument();
+    expect(within(optionalSection).getByTestId("toggle-jarvis-phone-gateway")).toBeInTheDocument();
+  });
+
+  it("does NOT auto-enable optional services on load", async () => {
+    renderModulesStep();
+    const toggle = await screen.findByTestId("toggle-jarvis-phone-gateway");
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("optional services can be toggled on", async () => {
+    renderModulesStep();
+    const user = userEvent.setup();
+    const toggle = await screen.findByTestId("toggle-jarvis-phone-gateway");
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+  });
+});

@@ -81,6 +81,19 @@ export function generateEnv(state: WizardState, registry: ServiceRegistry): stri
     lines.push("");
   }
 
+  // Phone gateway (optional): Twilio credentials are gateway-only env secrets
+  // (never the settings DB — phone-calls PRD). Empty placeholders — the user
+  // pastes real values. The compose references them as ${VAR:-} so an unset
+  // var degrades to empty (gateway fails closed) instead of a compose warning.
+  if (state.enabledModules.includes("jarvis-phone-gateway")) {
+    lines.push("# --- Phone Gateway (Twilio credentials + public wss URL — fill in) ---");
+    lines.push("TWILIO_ACCOUNT_SID=");
+    lines.push("TWILIO_AUTH_TOKEN=");
+    lines.push("TWILIO_FROM_NUMBER=");
+    lines.push("PHONE_GATEWAY_PUBLIC_WSS_URL=");
+    lines.push("");
+  }
+
   // Release Track
   lines.push("# --- Release Track ---");
   lines.push(`JARVIS_IMAGE_TAG=${state.releaseTrack === "dev" ? "dev" : "latest"}`);

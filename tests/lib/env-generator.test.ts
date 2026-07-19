@@ -168,3 +168,36 @@ describe("env-generator", () => {
     });
   });
 });
+
+describe("Phone gateway (jarvis-phone-gateway)", () => {
+  it("writes port + empty Twilio placeholders when enabled", async () => {
+    const { generateEnv } = await import("@/lib/env-generator");
+    const { parseRegistry } = await import("@/lib/service-registry");
+    const { makeState } = await import("../helpers/make-state");
+    const registryJson = await import("../../public/service-registry.json");
+    const registry = parseRegistry(registryJson.default);
+
+    const output = generateEnv(
+      makeState({ enabledModules: ["jarvis-phone-gateway"] }),
+      registry,
+    );
+    expect(output).toContain("PHONE_GATEWAY_PORT=7713");
+    expect(output).toContain("# --- Phone Gateway");
+    expect(output).toContain("TWILIO_ACCOUNT_SID=");
+    expect(output).toContain("TWILIO_AUTH_TOKEN=");
+    expect(output).toContain("TWILIO_FROM_NUMBER=");
+    expect(output).toContain("PHONE_GATEWAY_PUBLIC_WSS_URL=");
+  });
+
+  it("writes nothing phone-related when not enabled", async () => {
+    const { generateEnv } = await import("@/lib/env-generator");
+    const { parseRegistry } = await import("@/lib/service-registry");
+    const { makeState } = await import("../helpers/make-state");
+    const registryJson = await import("../../public/service-registry.json");
+    const registry = parseRegistry(registryJson.default);
+
+    const output = generateEnv(makeState({ enabledModules: [] }), registry);
+    expect(output).not.toContain("PHONE_GATEWAY_PORT");
+    expect(output).not.toContain("TWILIO_ACCOUNT_SID");
+  });
+});
