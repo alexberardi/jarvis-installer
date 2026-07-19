@@ -529,3 +529,36 @@ describe("compose-generator", () => {
     });
   });
 });
+
+describe("jarvis-phone-gateway (optional service, phone-calls PRD)", () => {
+  function gwBlock(output: string): string {
+    const start = output.indexOf("\n  jarvis-phone-gateway:\n");
+    expect(start, "jarvis-phone-gateway missing from compose").toBeGreaterThanOrEqual(0);
+    const after = output.slice(start + "\n  jarvis-phone-gateway:\n".length);
+    const next = after.match(/\n {2}[a-z][a-z0-9-]*:\n/);
+    return next ? after.slice(0, next.index) : after;
+  }
+
+  it("is excluded unless enabled (optional, default off)", () => {
+    const output = generateCompose(makeState({ enabledModules: [] }), registry);
+    expect(output).not.toContain("jarvis-phone-gateway:");
+  });
+
+  it("emits a standard first-party block when enabled", () => {
+    const output = generateCompose(
+      makeState({ enabledModules: ["jarvis-phone-gateway"] }),
+      registry,
+    );
+    const gw = gwBlock(output);
+    expect(gw).toContain("container_name: jarvis-phone-gateway");
+    expect(gw).toContain("${PHONE_GATEWAY_PORT:-7713}:7713");
+    expect(gw).toContain("REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0");
+    expect(gw).toContain("TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}");
+    expect(gw).toContain("TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}");
+    expect(gw).toContain("PHONE_GATEWAY_PUBLIC_WSS_URL: ${PHONE_GATEWAY_PUBLIC_WSS_URL:-}");
+    // No database → no migrate wrapper, no DATABASE_URL
+    expect(gw).not.toContain("DATABASE_URL");
+    expect(gw).toContain("depends_on:");
+    expect(gw).toContain("jarvis-command-center:");
+  });
+});

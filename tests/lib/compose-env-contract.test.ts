@@ -60,13 +60,28 @@ describe("compose ↔ env contract (fresh install)", () => {
     ).toEqual([]);
   });
 
+  // Credentials the user pastes into .env after install — the generator can't
+  // mint them, and the owning service FAILS CLOSED while they're blank (the
+  // phone gateway refuses to dial without Twilio creds). Same class as
+  // JARVIS_RELAY_HOUSEHOLD_JWT, which only dodges the regex by its name.
+  // Everything here must have an empty .env placeholder written when its
+  // service is enabled, so there's an obvious place to paste the value.
+  const USER_SUPPLIED_CREDS = new Set(["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"]);
+
   it("no secret-shaped key gets a literally-empty ${VAR:-} fallback", () => {
     const emptyDefaultSecrets = [
       ...compose.matchAll(/\$\{([A-Z0-9_]*(?:PASSWORD|SECRET|TOKEN|KEY)[A-Z0-9_]*):-\}/g),
     ]
       .map((m) => m[1]!)
       // App-to-app creds are intentionally empty until service registration.
-      .filter((v) => !v.startsWith("JARVIS_APP_ID_") && !v.startsWith("JARVIS_APP_KEY_"));
+      .filter((v) => !v.startsWith("JARVIS_APP_ID_") && !v.startsWith("JARVIS_APP_KEY_"))
+      .filter((v) => !USER_SUPPLIED_CREDS.has(v));
     expect(emptyDefaultSecrets).toEqual([]);
+  });
+
+  it("user-supplied creds get an empty .env placeholder to paste into", () => {
+    for (const v of USER_SUPPLIED_CREDS) {
+      expect(defined.has(v), `${v} missing from generated .env`).toBe(true);
+    }
   });
 });
