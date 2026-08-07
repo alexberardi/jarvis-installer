@@ -702,3 +702,35 @@ describe("compose-export-generator: jarvis-phone-gateway upstream URLs", () => {
     expect(gw).toContain('JARVIS_AUTH_BASE_URL: "http://jarvis-auth:');
   });
 });
+
+describe("compose-export-generator: CC async-job callback token", () => {
+  const registry = parseRegistry(registryJson);
+
+  const ccBlock = (output: string): string => {
+    const start = output.indexOf("\n  jarvis-command-center:\n");
+    if (start < 0) throw new Error("jarvis-command-center not found");
+    const rest = output.slice(start + 1);
+    const end = rest.search(/\n  [a-z][a-z0-9-]*:\n/);
+    return end > 0 ? rest.slice(0, end) : rest;
+  };
+
+  // Regression (prod 2026-08-07): the token was emitted BOTH by the generic
+  // envVars loop (from the service-registry secretRef) AND a hardcoded push in
+  // the CC-specific block, so the CC environment defined the key twice ->
+  // "mapping key JARVIS_ADAPTER_CALLBACK_TOKEN already defined" -> invalid YAML
+  // -> install-e2e "Validate generated compose" + Pages boot-smoke failed.
+  it("emits JARVIS_ADAPTER_CALLBACK_TOKEN for CC exactly once (no duplicate key)", () => {
+    const cc = ccBlock(generateComposeExport(makeState({ secrets: {} }), registry));
+    const count = (cc.match(/JARVIS_ADAPTER_CALLBACK_TOKEN:/g) || []).length;
+    expect(count).toBe(1);
+  });
+
+  it("resolves the callback token to a strong value via the registry secretRef", () => {
+    const cc = ccBlock(generateComposeExport(makeState({ secrets: {} }), registry));
+    const m = cc.match(/JARVIS_ADAPTER_CALLBACK_TOKEN: "([^"]*)"/);
+    expect(m).toBeTruthy();
+    const val = m![1] ?? "";
+    expect(val.length).toBeGreaterThanOrEqual(32);
+    expect(["", "changeme", "change-me", "__SET_ME__"]).not.toContain(val);
+  });
+});
