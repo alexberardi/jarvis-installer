@@ -685,3 +685,20 @@ describe("compose-export-generator: dockerized URL style + localhost broker", ()
     expect(output).not.toContain('"jarvis-mqtt-broker", "host.docker.internal"');
   });
 });
+
+describe("compose-export-generator: jarvis-phone-gateway upstream URLs", () => {
+  const registry = parseRegistry(registryJson);
+
+  // The dial worker fetches the call session from command-center; without a CC base
+  // URL the gateway defaulted to localhost and dropped every dial job ("session fetch
+  // failed") — prod 2026-08-07. Mirrors the JARVIS_AUTH_BASE_URL wiring.
+  it("emits JARVIS_COMMAND_CENTER_BASE_URL for the gateway (and still wires auth)", () => {
+    const output = generateComposeExport(
+      makeState({ enabledModules: ["jarvis-phone-gateway"] }),
+      registry,
+    );
+    const gw = serviceBlock(output, "jarvis-phone-gateway");
+    expect(gw).toContain('JARVIS_COMMAND_CENTER_BASE_URL: "http://jarvis-command-center:');
+    expect(gw).toContain('JARVIS_AUTH_BASE_URL: "http://jarvis-auth:');
+  });
+});
