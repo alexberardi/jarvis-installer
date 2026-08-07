@@ -41,7 +41,6 @@ interface SecretsMap {
   grafanaPassword: string;
   modelServiceToken: string;
   mqttPassword: string;
-  adapterCallbackToken: string;
   dbUser: string;
 }
 
@@ -100,7 +99,6 @@ export function generateComposeExport(
     grafanaPassword: resolveSecret("GRAFANA_ADMIN_PASSWORD"),
     modelServiceToken: resolveSecret("MODEL_SERVICE_TOKEN"),
     mqttPassword: resolveSecret("MQTT_PASSWORD"),
-    adapterCallbackToken: resolveSecret("JARVIS_ADAPTER_CALLBACK_TOKEN"),
     dbUser: state.dbUser || "jarvis",
   };
 
@@ -574,10 +572,11 @@ function generateExportServiceBlock(
     // settings writes) 500s with "JARVIS_AUTH_SECRET_KEY not configured".
     lines.push(`      JARVIS_AUTH_SECRET_KEY: "${secrets.authSecretKey}"`);
     lines.push('      JARVIS_AUTH_ALGORITHM: "HS256"');
-    // CC-internal auth for async-job result callbacks (memory extraction, deep
-    // research, characterization, adapter training). Fail-closed: unset -> every
-    // callback 503s and nothing persists (save_memory, transcript mark_processed).
-    lines.push(`      JARVIS_ADAPTER_CALLBACK_TOKEN: "${secrets.adapterCallbackToken}"`);
+    // NOTE: JARVIS_ADAPTER_CALLBACK_TOKEN (CC-internal auth for async-job result
+    // callbacks — memory extraction, deep research, characterization, adapter
+    // training; fail-closed) is emitted by the generic envVars loop from the
+    // service-registry secretRef, exactly like ADMIN_API_KEY. Do NOT re-emit it
+    // here — a second definition makes the CC env block invalid YAML (dup key).
     // CC publishes to nodes over MQTT (K2 provision, settings push, tool
     // dispatch, package install). Without the broker URL it defaults to
     // localhost:1883 inside its own container and every publish 503s
