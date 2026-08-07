@@ -24,6 +24,12 @@ export const SECRET_KEYS = [
   // mosquitto container hashes this into a password_file at startup; command-
   // center authenticates with it and hands it to nodes. 'PASSWORD' -> 16B/32hex.
   "MQTT_PASSWORD",
+  // CC-internal auth for async-job result callbacks (memory extraction, deep
+  // research, characterization synthesis, adapter training). CC signs the enqueue
+  // + validates the /…/callback (fail-closed): unset -> every callback 503s and
+  // the persist step (save_memory, transcript mark_processed, inbox delivery)
+  // never runs. No 'PASSWORD' in the name -> 32 bytes / 64 hex.
+  "JARVIS_ADAPTER_CALLBACK_TOKEN",
 ] as const;
 
 export type SecretKey = (typeof SECRET_KEYS)[number];
