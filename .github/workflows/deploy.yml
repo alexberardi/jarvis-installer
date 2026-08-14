@@ -96,7 +96,7 @@ jobs:
           sudo mkdir -p /var/lib/jarvis && sudo chmod 777 /var/lib/jarvis
           docker compose -p "$COMPOSE_PROJECT" -f "$GEN_FILE" -f "$OVERRIDE_FILE" up -d
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
