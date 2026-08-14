@@ -562,3 +562,21 @@ describe("jarvis-phone-gateway (optional service, phone-calls PRD)", () => {
     expect(gw).toContain("jarvis-command-center:");
   });
 });
+
+describe("jarvis-command-center REDIS_URL (enqueues phone-call dials the gateway consumes)", () => {
+  function ccBlock(output: string): string {
+    const start = output.indexOf("\n  jarvis-command-center:\n");
+    expect(start, "jarvis-command-center missing from compose").toBeGreaterThanOrEqual(0);
+    const after = output.slice(start + "\n  jarvis-command-center:\n".length);
+    const next = after.match(/\n {2}[a-z][a-z0-9-]*:\n/);
+    return next ? after.slice(0, next.index) : after;
+  }
+
+  // Prod 2026-08-06: CC's compose service was missing REDIS_URL, so a confirmed
+  // call could never be LPUSHed to the phone:dial queue and the gateway never
+  // dialed. The value must match the gateway's (same Redis, same auth).
+  it("wires REDIS_URL so confirmed calls reach the dial queue", () => {
+    const cc = ccBlock(generateCompose(makeState(), registry));
+    expect(cc).toContain("REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0");
+  });
+});

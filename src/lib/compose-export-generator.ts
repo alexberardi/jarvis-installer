@@ -555,6 +555,16 @@ function generateExportServiceBlock(
     lines.push(`      JARVIS_AUTH_BASE_URL: "http://jarvis-auth:${authContainerPort}"`);
   }
 
+  // JARVIS_COMMAND_CENTER_BASE_URL for services that call CC directly (e.g.
+  // jarvis-phone-gateway fetching the call session). Same rationale/name as
+  // JARVIS_AUTH_BASE_URL; without it the gateway defaulted to localhost and dropped
+  // every dial job ("session fetch failed") — prod 2026-08-07.
+  const ccService = allEnabled.find((s) => s.id === "jarvis-command-center");
+  if (service.id !== "jarvis-command-center" && service.dependsOn.includes("jarvis-command-center") && ccService) {
+    const ccContainerPort = getContainerPort(ccService);
+    lines.push(`      JARVIS_COMMAND_CENTER_BASE_URL: "http://jarvis-command-center:${ccContainerPort}"`);
+  }
+
   // Service-specific extra env vars
   if (service.id === "jarvis-command-center") {
     // CC validates user JWTs locally (verify_user_jwt) with the shared secret.
@@ -562,6 +572,11 @@ function generateExportServiceBlock(
     // settings writes) 500s with "JARVIS_AUTH_SECRET_KEY not configured".
     lines.push(`      JARVIS_AUTH_SECRET_KEY: "${secrets.authSecretKey}"`);
     lines.push('      JARVIS_AUTH_ALGORITHM: "HS256"');
+    // NOTE: JARVIS_ADAPTER_CALLBACK_TOKEN (CC-internal auth for async-job result
+    // callbacks — memory extraction, deep research, characterization, adapter
+    // training; fail-closed) is emitted by the generic envVars loop from the
+    // service-registry secretRef, exactly like ADMIN_API_KEY. Do NOT re-emit it
+    // here — a second definition makes the CC env block invalid YAML (dup key).
     // CC publishes to nodes over MQTT (K2 provision, settings push, tool
     // dispatch, package install). Without the broker URL it defaults to
     // localhost:1883 inside its own container and every publish 503s
@@ -920,6 +935,17 @@ function generateExportWorkerBlock(
   ) {
     const authContainerPort = getContainerPort(authService);
     lines.push(`      JARVIS_AUTH_BASE_URL: "http://jarvis-auth:${authContainerPort}"`);
+  }
+
+  const ccService = allEnabled.find((s) => s.id === "jarvis-command-center");
+  if (
+    parent.id !== "jarvis-command-center" &&
+    parent.dependsOn.includes("jarvis-command-center") &&
+    ccService &&
+    !overrideKeys.has("JARVIS_COMMAND_CENTER_BASE_URL")
+  ) {
+    const ccContainerPort = getContainerPort(ccService);
+    lines.push(`      JARVIS_COMMAND_CENTER_BASE_URL: "http://jarvis-command-center:${ccContainerPort}"`);
   }
 
   if (parent.id === "jarvis-llm-proxy-api") {
