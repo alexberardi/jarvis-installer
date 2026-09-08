@@ -9,16 +9,43 @@
       "port": 7700,
       "image": "ghcr.io/alexberardi/jarvis-config-service:latest",
       "healthCheck": "/health",
-      "dependsOn": ["postgres"],
+      "dependsOn": [
+        "postgres"
+      ],
       "database": "jarvis_config",
       "dbDriverPrefix": "postgresql://",
       "migrate": true,
       "envVars": [
-        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
-        { "name": "MIGRATIONS_DATABASE_URL", "description": "PostgreSQL URL for Alembic migrations", "required": true },
-        { "name": "JARVIS_CONFIG_ADMIN_TOKEN", "description": "Admin token for write operations", "required": true, "secret": true, "secretRef": "JARVIS_CONFIG_ADMIN_TOKEN" },
-        { "name": "JARVIS_AUTH_ADMIN_TOKEN", "description": "Token for auth admin endpoints", "required": true, "secret": true, "secretRef": "JARVIS_AUTH_ADMIN_TOKEN" },
-        { "name": "JARVIS_AUTH_URL", "description": "Auth service URL", "required": false, "default": "http://jarvis-auth:8000" }
+        {
+          "name": "DATABASE_URL",
+          "description": "PostgreSQL connection string",
+          "required": true
+        },
+        {
+          "name": "MIGRATIONS_DATABASE_URL",
+          "description": "PostgreSQL URL for Alembic migrations",
+          "required": true
+        },
+        {
+          "name": "JARVIS_CONFIG_ADMIN_TOKEN",
+          "description": "Admin token for write operations",
+          "required": true,
+          "secret": true,
+          "secretRef": "JARVIS_CONFIG_ADMIN_TOKEN"
+        },
+        {
+          "name": "JARVIS_AUTH_ADMIN_TOKEN",
+          "description": "Token for auth admin endpoints",
+          "required": true,
+          "secret": true,
+          "secretRef": "JARVIS_AUTH_ADMIN_TOKEN"
+        },
+        {
+          "name": "JARVIS_AUTH_URL",
+          "description": "Auth service URL",
+          "required": false,
+          "default": "http://jarvis-auth:8000"
+        }
       ]
     },
     {
@@ -30,16 +57,45 @@
       "containerPort": 8000,
       "image": "ghcr.io/alexberardi/jarvis-auth:latest",
       "healthCheck": "/health",
-      "dependsOn": ["postgres", "jarvis-config-service"],
+      "dependsOn": [
+        "postgres",
+        "jarvis-config-service"
+      ],
       "database": "jarvis_auth",
       "dbDriverPrefix": "postgresql+psycopg2://",
       "migrate": true,
       "envVars": [
-        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
-        { "name": "AUTH_SECRET_KEY", "description": "JWT signing key", "required": true, "secret": true, "secretRef": "AUTH_SECRET_KEY" },
-        { "name": "JARVIS_AUTH_ADMIN_TOKEN", "description": "Admin token for auth endpoints", "required": true, "secret": true, "secretRef": "JARVIS_AUTH_ADMIN_TOKEN" },
-        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:7700" },
-        { "name": "REFRESH_TOKEN_GRACE_SECONDS", "description": "Grace window (seconds) before a reused refresh token triggers family revocation. Default 10 suits single-device installs; raise for slow-network/multi-client.", "required": false, "default": "10" }
+        {
+          "name": "DATABASE_URL",
+          "description": "PostgreSQL connection string",
+          "required": true
+        },
+        {
+          "name": "AUTH_SECRET_KEY",
+          "description": "JWT signing key",
+          "required": true,
+          "secret": true,
+          "secretRef": "AUTH_SECRET_KEY"
+        },
+        {
+          "name": "JARVIS_AUTH_ADMIN_TOKEN",
+          "description": "Admin token for auth endpoints",
+          "required": true,
+          "secret": true,
+          "secretRef": "JARVIS_AUTH_ADMIN_TOKEN"
+        },
+        {
+          "name": "JARVIS_CONFIG_URL",
+          "description": "Config service URL",
+          "required": false,
+          "default": "http://jarvis-config-service:7700"
+        },
+        {
+          "name": "REFRESH_TOKEN_GRACE_SECONDS",
+          "description": "Grace window (seconds) before a reused refresh token triggers family revocation. Default 10 suits single-device installs; raise for slow-network/multi-client.",
+          "required": false,
+          "default": "10"
+        }
       ]
     },
     {
@@ -50,10 +106,23 @@
       "port": 7702,
       "image": "ghcr.io/alexberardi/jarvis-logs:latest",
       "healthCheck": "/health",
-      "dependsOn": ["loki", "jarvis-auth"],
+      "dependsOn": [
+        "loki",
+        "jarvis-auth"
+      ],
       "envVars": [
-        { "name": "LOKI_URL", "description": "Loki push endpoint", "required": true, "default": "http://loki:3100" },
-        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:7700" }
+        {
+          "name": "LOKI_URL",
+          "description": "Loki push endpoint",
+          "required": true,
+          "default": "http://loki:3100"
+        },
+        {
+          "name": "JARVIS_CONFIG_URL",
+          "description": "Config service URL",
+          "required": false,
+          "default": "http://jarvis-config-service:7700"
+        }
       ]
     },
     {
@@ -65,37 +134,193 @@
       "containerPort": 8002,
       "image": "ghcr.io/alexberardi/jarvis-command-center:latest",
       "healthCheck": "/health",
-      "dependsOn": ["postgres", "jarvis-auth", "jarvis-config-service", "mosquitto"],
+      "dependsOn": [
+        "postgres",
+        "jarvis-auth",
+        "jarvis-config-service",
+        "mosquitto"
+      ],
       "database": "jarvis_command_center",
       "dbDriverPrefix": "postgresql://",
       "migrate": true,
-      "volumes": ["command-center-prompt-providers:/app/core/prompt_providers_custom"],
+      "volumes": [
+        "command-center-prompt-providers:/app/core/prompt_providers_custom"
+      ],
       "llmInterfaceOptions": [
-        { "id": "Qwen25MediumUntrained", "name": "Qwen 2.5 (7B-14B)", "description": "Recommended for Qwen 2.5 models", "default": true },
-        { "id": "Qwen3LargeUntrained", "name": "Qwen 3 (14B-32B)", "description": "For Qwen 3 models with thinking support" },
-        { "id": "HermesMediumUntrained", "name": "Hermes 3 (8B)", "description": "Hermes 3 Llama 8B Instruct" },
-        { "id": "Llama31MediumUntrained", "name": "Llama 3.1 (8B)", "description": "Meta Llama 3.1 8B Instruct" },
-        { "id": "Mistral7bMediumUntrained", "name": "Mistral 7B", "description": "Mistral 7B Instruct v0.3" },
-        { "id": "Gemma2MediumUntrained", "name": "Gemma 2 (9B)", "description": "Google Gemma 2 9B IT" },
-        { "id": "MixtralLargeUntrained", "name": "Mixtral 8x7B", "description": "Mixture-of-experts, needs ~26GB VRAM" },
-        { "id": "LlamaSmallUntrained", "name": "Llama Small (1B-3B)", "description": "Optimized for very small models" }
+        {
+          "id": "Qwen25MediumUntrained",
+          "name": "Qwen 2.5 (7B-14B)",
+          "description": "Recommended for Qwen 2.5 models",
+          "default": true
+        },
+        {
+          "id": "Qwen3LargeUntrained",
+          "name": "Qwen 3 (14B-32B)",
+          "description": "For Qwen 3 models with thinking support"
+        },
+        {
+          "id": "HermesMediumUntrained",
+          "name": "Hermes 3 (8B)",
+          "description": "Hermes 3 Llama 8B Instruct"
+        },
+        {
+          "id": "Llama31MediumUntrained",
+          "name": "Llama 3.1 (8B)",
+          "description": "Meta Llama 3.1 8B Instruct"
+        },
+        {
+          "id": "Mistral7bMediumUntrained",
+          "name": "Mistral 7B",
+          "description": "Mistral 7B Instruct v0.3"
+        },
+        {
+          "id": "Gemma2MediumUntrained",
+          "name": "Gemma 2 (9B)",
+          "description": "Google Gemma 2 9B IT"
+        },
+        {
+          "id": "MixtralLargeUntrained",
+          "name": "Mixtral 8x7B",
+          "description": "Mixture-of-experts, needs ~26GB VRAM"
+        },
+        {
+          "id": "LlamaSmallUntrained",
+          "name": "Llama Small (1B-3B)",
+          "description": "Optimized for very small models"
+        }
       ],
       "modelPresets": [
-        { "id": "qwen25-7b", "name": "Qwen 2.5 7B Instruct", "description": "Recommended for single GPU", "hfRepo": "Qwen/Qwen2.5-7B-Instruct", "modelName": ".models/Qwen2.5-7B-Instruct", "backend": "VLLM", "chatFormat": "qwen", "contextWindow": 32768, "interface": "Qwen25MediumUntrained", "vram": "~14GB" },
-        { "id": "qwen25-14b", "name": "Qwen 2.5 14B Instruct", "description": "Higher quality, needs ~28GB", "hfRepo": "Qwen/Qwen2.5-14B-Instruct", "modelName": ".models/Qwen2.5-14B-Instruct", "backend": "VLLM", "chatFormat": "qwen", "contextWindow": 32768, "interface": "Qwen25MediumUntrained", "vram": "~28GB" },
-        { "id": "qwen3-30b-gguf", "name": "Qwen3 30B-A3B GGUF", "description": "MoE, 3B active, fits single GPU", "hfRepo": "bartowski/Qwen_Qwen3-30B-A3B-GGUF", "modelName": ".models/Qwen3-30B-A3B-Q4_K_M/Qwen_Qwen3-30B-A3B-Q4_K_M.gguf", "backend": "GGUF", "chatFormat": "chatml", "contextWindow": 32768, "interface": "Qwen3LargeUntrained", "vram": "~19GB", "hfFilename": "Qwen_Qwen3-30B-A3B-Q4_K_M.gguf" },
-        { "id": "llama31-8b", "name": "Llama 3.1 8B Instruct", "description": "128K context window", "hfRepo": "meta-llama/Llama-3.1-8B-Instruct", "modelName": ".models/Llama-3.1-8B-Instruct", "backend": "VLLM", "chatFormat": "llama3", "contextWindow": 131072, "interface": "Llama31MediumUntrained", "vram": "~16GB" },
-        { "id": "hermes-8b", "name": "Hermes 3 Llama 8B", "description": "Function calling specialist", "hfRepo": "NousResearch/Hermes-3-Llama-3.1-8B", "modelName": ".models/Hermes-3-Llama-3.1-8B", "backend": "VLLM", "chatFormat": "chatml", "contextWindow": 32768, "interface": "HermesMediumUntrained", "vram": "~16GB" },
-        { "id": "mistral-7b", "name": "Mistral 7B Instruct", "description": "Compact and fast", "hfRepo": "mistralai/Mistral-7B-Instruct-v0.3", "modelName": ".models/Mistral-7B-Instruct-v0.3", "backend": "VLLM", "chatFormat": "mistral", "contextWindow": 32768, "interface": "Mistral7bMediumUntrained", "vram": "~14GB" },
-        { "id": "gemma2-9b", "name": "Gemma 2 9B IT", "description": "Google's instruction-tuned model", "hfRepo": "google/gemma-2-9b-it", "modelName": ".models/gemma-2-9b-it", "backend": "VLLM", "chatFormat": "chatml", "contextWindow": 8192, "interface": "Gemma2MediumUntrained", "vram": "~18GB" },
-        { "id": "mixtral-gguf", "name": "Mixtral 8x7B GGUF", "description": "MoE, multi-GPU via llama.cpp", "hfRepo": "mradermacher/Mixtral-8x7B-Instruct-v0.1-GGUF", "modelName": ".models/Mixtral-8x7B-Instruct-v0.1.Q4_K_M.gguf", "backend": "GGUF", "chatFormat": "chatml", "contextWindow": 32768, "interface": "MixtralLargeUntrained", "vram": "~26GB", "hfFilename": "Mixtral-8x7B-Instruct-v0.1.Q4_K_M.gguf" }
+        {
+          "id": "qwen25-7b",
+          "name": "Qwen 2.5 7B Instruct",
+          "description": "Recommended for single GPU",
+          "hfRepo": "Qwen/Qwen2.5-7B-Instruct",
+          "modelName": ".models/Qwen2.5-7B-Instruct",
+          "backend": "VLLM",
+          "chatFormat": "qwen",
+          "contextWindow": 32768,
+          "interface": "Qwen25MediumUntrained",
+          "vram": "~14GB"
+        },
+        {
+          "id": "qwen25-14b",
+          "name": "Qwen 2.5 14B Instruct",
+          "description": "Higher quality, needs ~28GB",
+          "hfRepo": "Qwen/Qwen2.5-14B-Instruct",
+          "modelName": ".models/Qwen2.5-14B-Instruct",
+          "backend": "VLLM",
+          "chatFormat": "qwen",
+          "contextWindow": 32768,
+          "interface": "Qwen25MediumUntrained",
+          "vram": "~28GB"
+        },
+        {
+          "id": "qwen3-30b-gguf",
+          "name": "Qwen3 30B-A3B GGUF",
+          "description": "MoE, 3B active, fits single GPU",
+          "hfRepo": "bartowski/Qwen_Qwen3-30B-A3B-GGUF",
+          "modelName": ".models/Qwen3-30B-A3B-Q4_K_M/Qwen_Qwen3-30B-A3B-Q4_K_M.gguf",
+          "backend": "GGUF",
+          "chatFormat": "chatml",
+          "contextWindow": 32768,
+          "interface": "Qwen3LargeUntrained",
+          "vram": "~19GB",
+          "hfFilename": "Qwen_Qwen3-30B-A3B-Q4_K_M.gguf"
+        },
+        {
+          "id": "llama31-8b",
+          "name": "Llama 3.1 8B Instruct",
+          "description": "128K context window",
+          "hfRepo": "meta-llama/Llama-3.1-8B-Instruct",
+          "modelName": ".models/Llama-3.1-8B-Instruct",
+          "backend": "VLLM",
+          "chatFormat": "llama3",
+          "contextWindow": 131072,
+          "interface": "Llama31MediumUntrained",
+          "vram": "~16GB"
+        },
+        {
+          "id": "hermes-8b",
+          "name": "Hermes 3 Llama 8B",
+          "description": "Function calling specialist",
+          "hfRepo": "NousResearch/Hermes-3-Llama-3.1-8B",
+          "modelName": ".models/Hermes-3-Llama-3.1-8B",
+          "backend": "VLLM",
+          "chatFormat": "chatml",
+          "contextWindow": 32768,
+          "interface": "HermesMediumUntrained",
+          "vram": "~16GB"
+        },
+        {
+          "id": "mistral-7b",
+          "name": "Mistral 7B Instruct",
+          "description": "Compact and fast",
+          "hfRepo": "mistralai/Mistral-7B-Instruct-v0.3",
+          "modelName": ".models/Mistral-7B-Instruct-v0.3",
+          "backend": "VLLM",
+          "chatFormat": "mistral",
+          "contextWindow": 32768,
+          "interface": "Mistral7bMediumUntrained",
+          "vram": "~14GB"
+        },
+        {
+          "id": "gemma2-9b",
+          "name": "Gemma 2 9B IT",
+          "description": "Google's instruction-tuned model",
+          "hfRepo": "google/gemma-2-9b-it",
+          "modelName": ".models/gemma-2-9b-it",
+          "backend": "VLLM",
+          "chatFormat": "chatml",
+          "contextWindow": 8192,
+          "interface": "Gemma2MediumUntrained",
+          "vram": "~18GB"
+        },
+        {
+          "id": "mixtral-gguf",
+          "name": "Mixtral 8x7B GGUF",
+          "description": "MoE, multi-GPU via llama.cpp",
+          "hfRepo": "mradermacher/Mixtral-8x7B-Instruct-v0.1-GGUF",
+          "modelName": ".models/Mixtral-8x7B-Instruct-v0.1.Q4_K_M.gguf",
+          "backend": "GGUF",
+          "chatFormat": "chatml",
+          "contextWindow": 32768,
+          "interface": "MixtralLargeUntrained",
+          "vram": "~26GB",
+          "hfFilename": "Mixtral-8x7B-Instruct-v0.1.Q4_K_M.gguf"
+        }
       ],
       "envVars": [
-        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
-        { "name": "ADMIN_API_KEY", "description": "Admin endpoint protection", "required": true, "secret": true, "secretRef": "ADMIN_API_KEY" },
-        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:7700" },
-        { "name": "REDIS_URL", "description": "Redis connection for the phone-call dial queue (CC enqueues dials the gateway consumes)", "required": false, "default": "redis://:${REDIS_PASSWORD}@redis:6379/0" },
-        { "name": "JARVIS_ADAPTER_CALLBACK_TOKEN", "description": "CC-internal auth for async-job result callbacks (memory extraction, deep research, characterization, adapter training); fail-closed — unset means callbacks 503 and nothing persists (save_memory, transcript mark_processed, inbox delivery)", "required": true, "secret": true, "secretRef": "JARVIS_ADAPTER_CALLBACK_TOKEN" }
+        {
+          "name": "DATABASE_URL",
+          "description": "PostgreSQL connection string",
+          "required": true
+        },
+        {
+          "name": "ADMIN_API_KEY",
+          "description": "Admin endpoint protection",
+          "required": true,
+          "secret": true,
+          "secretRef": "ADMIN_API_KEY"
+        },
+        {
+          "name": "JARVIS_CONFIG_URL",
+          "description": "Config service URL",
+          "required": false,
+          "default": "http://jarvis-config-service:7700"
+        },
+        {
+          "name": "REDIS_URL",
+          "description": "Redis connection for the phone-call dial queue (CC enqueues dials the gateway consumes)",
+          "required": false,
+          "default": "redis://:${REDIS_PASSWORD}@redis:6379/0"
+        },
+        {
+          "name": "JARVIS_ADAPTER_CALLBACK_TOKEN",
+          "description": "CC-internal auth for async-job result callbacks (memory extraction, deep research, characterization, adapter training); fail-closed \u2014 unset means callbacks 503 and nothing persists (save_memory, transcript mark_processed, inbox delivery)",
+          "required": true,
+          "secret": true,
+          "secretRef": "JARVIS_ADAPTER_CALLBACK_TOKEN"
+        }
       ]
     },
     {
@@ -106,21 +331,52 @@
       "port": 7706,
       "image": "ghcr.io/alexberardi/jarvis-whisper-api:latest",
       "healthCheck": "/health",
-      "dependsOn": ["postgres", "jarvis-auth", "jarvis-config-service"],
+      "dependsOn": [
+        "postgres",
+        "jarvis-auth",
+        "jarvis-config-service"
+      ],
       "database": "jarvis_whisper",
       "dbDriverPrefix": "postgresql+psycopg2://",
       "migrate": true,
       "gpu": true,
       "cpuFallback": true,
       "modelOptions": [
-        { "id": "base.en", "name": "Base English", "size": "~140MB", "default": true, "builtin": true },
-        { "id": "small.en", "name": "Small English", "size": "~460MB" },
-        { "id": "medium.en", "name": "Medium English", "size": "~1.5GB" },
-        { "id": "large-v3", "name": "Large v3 (Multilingual)", "size": "~3GB" }
+        {
+          "id": "base.en",
+          "name": "Base English",
+          "size": "~140MB",
+          "default": true,
+          "builtin": true
+        },
+        {
+          "id": "small.en",
+          "name": "Small English",
+          "size": "~460MB"
+        },
+        {
+          "id": "medium.en",
+          "name": "Medium English",
+          "size": "~1.5GB"
+        },
+        {
+          "id": "large-v3",
+          "name": "Large v3 (Multilingual)",
+          "size": "~3GB"
+        }
       ],
       "envVars": [
-        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
-        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:7700" }
+        {
+          "name": "DATABASE_URL",
+          "description": "PostgreSQL connection string",
+          "required": true
+        },
+        {
+          "name": "JARVIS_CONFIG_URL",
+          "description": "Config service URL",
+          "required": false,
+          "default": "http://jarvis-config-service:7700"
+        }
       ]
     },
     {
@@ -131,13 +387,26 @@
       "port": 7707,
       "image": "ghcr.io/alexberardi/jarvis-tts:latest",
       "healthCheck": "/health",
-      "dependsOn": ["postgres", "jarvis-auth", "jarvis-config-service"],
+      "dependsOn": [
+        "postgres",
+        "jarvis-auth",
+        "jarvis-config-service"
+      ],
       "database": "jarvis_tts",
       "dbDriverPrefix": "postgresql+psycopg2://",
       "migrate": true,
       "envVars": [
-        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
-        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:7700" }
+        {
+          "name": "DATABASE_URL",
+          "description": "PostgreSQL connection string",
+          "required": true
+        },
+        {
+          "name": "JARVIS_CONFIG_URL",
+          "description": "Config service URL",
+          "required": false,
+          "default": "http://jarvis-config-service:7700"
+        }
       ]
     },
     {
@@ -148,16 +417,34 @@
       "port": 7704,
       "image": "ghcr.io/alexberardi/jarvis-llm-proxy-api:latest",
       "healthCheck": "/health",
-      "dependsOn": ["postgres", "redis", "jarvis-auth", "jarvis-config-service"],
+      "dependsOn": [
+        "postgres",
+        "redis",
+        "jarvis-auth",
+        "jarvis-config-service"
+      ],
       "database": "jarvis_llm_proxy",
       "dbDriverPrefix": "postgresql+psycopg2://",
       "migrate": true,
       "gpu": true,
       "modelVolume": true,
       "envVars": [
-        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
-        { "name": "MIGRATIONS_DATABASE_URL", "description": "PostgreSQL URL for Alembic", "required": true },
-        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:7700" }
+        {
+          "name": "DATABASE_URL",
+          "description": "PostgreSQL connection string",
+          "required": true
+        },
+        {
+          "name": "MIGRATIONS_DATABASE_URL",
+          "description": "PostgreSQL URL for Alembic",
+          "required": true
+        },
+        {
+          "name": "JARVIS_CONFIG_URL",
+          "description": "Config service URL",
+          "required": false,
+          "default": "http://jarvis-config-service:7700"
+        }
       ],
       "workers": [
         {
@@ -178,16 +465,46 @@
       "port": 7712,
       "image": "ghcr.io/alexberardi/jarvis-notifications:latest",
       "healthCheck": "/health",
-      "dependsOn": ["postgres", "jarvis-auth", "jarvis-config-service"],
+      "dependsOn": [
+        "postgres",
+        "jarvis-auth",
+        "jarvis-config-service"
+      ],
       "database": "jarvis_notifications",
       "dbDriverPrefix": "postgresql+psycopg2://",
       "migrate": true,
       "envVars": [
-        { "name": "DATABASE_URL", "description": "PostgreSQL connection string", "required": true },
-        { "name": "NOTIFICATIONS_PORT", "description": "Server port", "required": false, "default": "7712" },
-        { "name": "AUTH_SECRET_KEY", "description": "JWT signing key", "required": true, "secret": true, "secretRef": "AUTH_SECRET_KEY" },
-        { "name": "ADMIN_API_KEY", "description": "Admin endpoint protection", "required": true, "secret": true, "secretRef": "ADMIN_API_KEY" },
-        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:7700" }
+        {
+          "name": "DATABASE_URL",
+          "description": "PostgreSQL connection string",
+          "required": true
+        },
+        {
+          "name": "NOTIFICATIONS_PORT",
+          "description": "Server port",
+          "required": false,
+          "default": "7712"
+        },
+        {
+          "name": "AUTH_SECRET_KEY",
+          "description": "JWT signing key",
+          "required": true,
+          "secret": true,
+          "secretRef": "AUTH_SECRET_KEY"
+        },
+        {
+          "name": "ADMIN_API_KEY",
+          "description": "Admin endpoint protection",
+          "required": true,
+          "secret": true,
+          "secretRef": "ADMIN_API_KEY"
+        },
+        {
+          "name": "JARVIS_CONFIG_URL",
+          "description": "Config service URL",
+          "required": false,
+          "default": "http://jarvis-config-service:7700"
+        }
       ]
     },
     {
@@ -198,9 +515,17 @@
       "port": 7708,
       "image": "ghcr.io/alexberardi/jarvis-settings-server:latest",
       "healthCheck": "/health",
-      "dependsOn": ["jarvis-auth", "jarvis-config-service"],
+      "dependsOn": [
+        "jarvis-auth",
+        "jarvis-config-service"
+      ],
       "envVars": [
-        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:7700" }
+        {
+          "name": "JARVIS_CONFIG_URL",
+          "description": "Config service URL",
+          "required": false,
+          "default": "http://jarvis-config-service:7700"
+        }
       ]
     },
     {
@@ -211,9 +536,17 @@
       "port": 7722,
       "image": "ghcr.io/alexberardi/jarvis-web:latest",
       "healthCheck": "/",
-      "dependsOn": ["jarvis-auth", "jarvis-command-center"],
+      "dependsOn": [
+        "jarvis-auth",
+        "jarvis-command-center"
+      ],
       "envVars": [
-        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:7700" }
+        {
+          "name": "JARVIS_CONFIG_URL",
+          "description": "Config service URL",
+          "required": false,
+          "default": "http://jarvis-config-service:7700"
+        }
       ]
     },
     {
@@ -225,11 +558,30 @@
       "containerPort": 7711,
       "image": "ghcr.io/alexberardi/jarvis-admin:latest",
       "healthCheck": "/health",
-      "dependsOn": ["jarvis-auth", "jarvis-config-service"],
+      "dependsOn": [
+        "jarvis-auth",
+        "jarvis-config-service"
+      ],
       "envVars": [
-        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:7700" },
-        { "name": "JARVIS_COMPOSE_PATH", "description": "Where the host's docker-compose.yml + .env live (mounted into the container)", "required": false, "default": "/host/compose" },
-        { "name": "COMMAND_CENTER_ADMIN_KEY", "description": "Admin API key for command-center admin endpoints (traces, node detail); shares the ADMIN_API_KEY secret", "required": true, "secret": true, "secretRef": "ADMIN_API_KEY" }
+        {
+          "name": "JARVIS_CONFIG_URL",
+          "description": "Config service URL",
+          "required": false,
+          "default": "http://jarvis-config-service:7700"
+        },
+        {
+          "name": "JARVIS_COMPOSE_PATH",
+          "description": "Where the host's docker-compose.yml + .env live (mounted into the container)",
+          "required": false,
+          "default": "/host/compose"
+        },
+        {
+          "name": "COMMAND_CENTER_ADMIN_KEY",
+          "description": "Admin API key for command-center admin endpoints (traces, node detail); shares the ADMIN_API_KEY secret",
+          "required": true,
+          "secret": true,
+          "secretRef": "ADMIN_API_KEY"
+        }
       ],
       "volumes": [
         "/var/run/docker.sock:/var/run/docker.sock",
@@ -239,19 +591,200 @@
     {
       "id": "jarvis-phone-gateway",
       "name": "Phone Calls",
-      "description": "AI phone-call gateway — places user-confirmed outbound calls (reservations, orders) over Twilio using the local whisper/LLM/TTS pipeline",
+      "description": "AI phone-call gateway \u2014 places user-confirmed outbound calls (reservations, orders) over Twilio using the local whisper/LLM/TTS pipeline",
       "category": "optional",
       "port": 7713,
       "image": "ghcr.io/alexberardi/jarvis-phone-gateway:latest",
       "healthCheck": "/health",
-      "dependsOn": ["jarvis-auth", "jarvis-config-service", "jarvis-command-center"],
+      "dependsOn": [
+        "jarvis-auth",
+        "jarvis-config-service",
+        "jarvis-command-center"
+      ],
       "envVars": [
-        { "name": "JARVIS_CONFIG_URL", "description": "Config service URL", "required": false, "default": "http://jarvis-config-service:7700" },
-        { "name": "REDIS_URL", "description": "Redis connection for the dial queue", "required": false, "default": "redis://:${REDIS_PASSWORD}@redis:6379/0" },
-        { "name": "TWILIO_ACCOUNT_SID", "description": "Twilio account SID (gateway-only secret — paste into .env; never stored in the settings DB)", "required": true, "secret": true, "default": "${TWILIO_ACCOUNT_SID:-}" },
-        { "name": "TWILIO_AUTH_TOKEN", "description": "Twilio auth token (also the media-stream signature verification key — paste into .env)", "required": true, "secret": true, "default": "${TWILIO_AUTH_TOKEN:-}" },
-        { "name": "TWILIO_FROM_NUMBER", "description": "E.164 caller-ID number owned by the Twilio account (paste into .env)", "required": true, "default": "${TWILIO_FROM_NUMBER:-}" },
-        { "name": "PHONE_GATEWAY_PUBLIC_WSS_URL", "description": "Public wss:// URL Twilio Media Streams connects back to (named Cloudflare tunnel hostname, e.g. wss://calls.example.com)", "required": true, "default": "${PHONE_GATEWAY_PUBLIC_WSS_URL:-}" }
+        {
+          "name": "JARVIS_CONFIG_URL",
+          "description": "Config service URL",
+          "required": false,
+          "default": "http://jarvis-config-service:7700"
+        },
+        {
+          "name": "REDIS_URL",
+          "description": "Redis connection for the dial queue",
+          "required": false,
+          "default": "redis://:${REDIS_PASSWORD}@redis:6379/0"
+        },
+        {
+          "name": "TWILIO_ACCOUNT_SID",
+          "description": "Twilio account SID (gateway-only secret \u2014 paste into .env; never stored in the settings DB)",
+          "required": true,
+          "secret": true,
+          "default": "${TWILIO_ACCOUNT_SID:-}"
+        },
+        {
+          "name": "TWILIO_AUTH_TOKEN",
+          "description": "Twilio auth token (also the media-stream signature verification key \u2014 paste into .env)",
+          "required": true,
+          "secret": true,
+          "default": "${TWILIO_AUTH_TOKEN:-}"
+        },
+        {
+          "name": "TWILIO_FROM_NUMBER",
+          "description": "E.164 caller-ID number owned by the Twilio account (paste into .env)",
+          "required": true,
+          "default": "${TWILIO_FROM_NUMBER:-}"
+        },
+        {
+          "name": "PHONE_GATEWAY_PUBLIC_WSS_URL",
+          "description": "Public wss:// URL Twilio Media Streams connects back to (named Cloudflare tunnel hostname, e.g. wss://calls.example.com)",
+          "required": true,
+          "default": "${PHONE_GATEWAY_PUBLIC_WSS_URL:-}"
+        }
+      ]
+    },
+    {
+      "id": "jarvis-recipes-server",
+      "name": "Recipes",
+      "description": "Recipe box, meal planning and shopping lists for a household. Imports recipes from a URL or from photos of a page.",
+      "category": "optional",
+      "port": 7030,
+      "image": "ghcr.io/alexberardi/jarvis-recipes-server:latest",
+      "healthCheck": "/health",
+      "dependsOn": [
+        "postgres",
+        "redis",
+        "minio",
+        "jarvis-auth",
+        "jarvis-config-service"
+      ],
+      "database": "jarvis_recipes",
+      "dbDriverPrefix": "postgresql+psycopg2://",
+      "objectStore": {
+        "bucket": "jarvis-recipes"
+      },
+      "envVars": [
+        {
+          "name": "ADMIN_SECRET",
+          "description": "Secret for the static-data seed endpoints",
+          "required": true,
+          "secret": true,
+          "secretRef": "RECIPES_ADMIN_SECRET"
+        },
+        {
+          "name": "S3_BUCKET",
+          "description": "Bucket holding uploaded recipe images",
+          "required": true,
+          "default": "jarvis-recipes"
+        },
+        {
+          "name": "S3_ENDPOINT_URL",
+          "description": "MinIO endpoint",
+          "required": true,
+          "default": "http://minio:9000"
+        },
+        {
+          "name": "S3_FORCE_PATH_STYLE",
+          "description": "Path-style addressing (true for MinIO)",
+          "required": true,
+          "default": "true"
+        },
+        {
+          "name": "S3_REGION",
+          "description": "Region label; MinIO ignores it",
+          "required": false,
+          "default": "us-east-1"
+        },
+        {
+          "name": "AWS_ACCESS_KEY_ID",
+          "description": "Object store access key",
+          "required": true,
+          "secret": true,
+          "secretRef": "MINIO_ROOT_USER"
+        },
+        {
+          "name": "AWS_SECRET_ACCESS_KEY",
+          "description": "Object store secret key",
+          "required": true,
+          "secret": true,
+          "secretRef": "MINIO_ROOT_PASSWORD"
+        },
+        {
+          "name": "OCR_QUEUES",
+          "description": "OCR queues to fan an image out to, comma separated",
+          "required": false,
+          "default": "jarvis.ocr.jobs.linux"
+        }
+      ],
+      "workers": [
+        {
+          "id": "jarvis-recipes-worker",
+          "command": "python scripts/run_rq_worker.py",
+          "envOverrides": {}
+        }
+      ]
+    },
+    {
+      "id": "jarvis-ocr-service",
+      "name": "OCR",
+      "description": "Reads text out of photographed pages. Printed text only on Linux; handwriting needs the Apple Vision worker on a Mac (see the repo's DEPLOYMENT.md).",
+      "category": "optional",
+      "port": 7031,
+      "image": "ghcr.io/alexberardi/jarvis-ocr-service:latest",
+      "healthCheck": "/health",
+      "dependsOn": [
+        "redis",
+        "minio",
+        "jarvis-auth",
+        "jarvis-config-service"
+      ],
+      "envVars": [
+        {
+          "name": "OCR_ENABLE_RAPIDOCR",
+          "description": "Enable the RapidOCR engine",
+          "required": false,
+          "default": "true"
+        },
+        {
+          "name": "S3_ENDPOINT_URL",
+          "description": "MinIO endpoint",
+          "required": true,
+          "default": "http://minio:9000"
+        },
+        {
+          "name": "S3_FORCE_PATH_STYLE",
+          "description": "Path-style addressing (true for MinIO)",
+          "required": true,
+          "default": "true"
+        },
+        {
+          "name": "S3_REGION",
+          "description": "Region label; MinIO ignores it",
+          "required": false,
+          "default": "us-east-1"
+        },
+        {
+          "name": "AWS_ACCESS_KEY_ID",
+          "description": "Object store access key",
+          "required": true,
+          "secret": true,
+          "secretRef": "MINIO_ROOT_USER"
+        },
+        {
+          "name": "AWS_SECRET_ACCESS_KEY",
+          "description": "Object store secret key",
+          "required": true,
+          "secret": true,
+          "secretRef": "MINIO_ROOT_PASSWORD"
+        }
+      ],
+      "workers": [
+        {
+          "id": "jarvis-ocr-worker",
+          "command": "python worker.py",
+          "envOverrides": {
+            "OCR_QUEUE_NAME": "jarvis.ocr.jobs.linux"
+          }
+        }
       ]
     }
   ],
@@ -259,46 +792,111 @@
     {
       "id": "postgres",
       "name": "PostgreSQL",
-      "description": "Primary database — stores users, commands, recipes, settings, and service config",
+      "description": "Primary database \u2014 stores users, commands, recipes, settings, and service config",
       "image": "pgvector/pgvector:pg16",
       "port": 5432,
       "envVars": [
-        { "name": "POSTGRES_USER", "description": "Database superuser", "required": true, "default": "jarvis" },
-        { "name": "POSTGRES_PASSWORD", "description": "Database password", "required": true, "secret": true, "secretRef": "POSTGRES_PASSWORD" },
-        { "name": "POSTGRES_DB", "description": "Default database name", "required": true, "default": "jarvis_config" }
+        {
+          "name": "POSTGRES_USER",
+          "description": "Database superuser",
+          "required": true,
+          "default": "jarvis"
+        },
+        {
+          "name": "POSTGRES_PASSWORD",
+          "description": "Database password",
+          "required": true,
+          "secret": true,
+          "secretRef": "POSTGRES_PASSWORD"
+        },
+        {
+          "name": "POSTGRES_DB",
+          "description": "Default database name",
+          "required": true,
+          "default": "jarvis_config"
+        }
       ],
-      "volumes": ["jarvis-postgres-data:/var/lib/postgresql/data"]
+      "volumes": [
+        "jarvis-postgres-data:/var/lib/postgresql/data"
+      ]
     },
     {
       "id": "redis",
       "name": "Redis",
-      "description": "Task queue — used for long-running jobs like OCR processing and async pipelines",
+      "description": "Task queue \u2014 used for long-running jobs like OCR processing and async pipelines",
       "image": "redis:7-alpine",
       "port": 6379,
+      "command": "redis-server --requirepass ${REDIS_PASSWORD}",
       "envVars": [
-        { "name": "REDIS_PASSWORD", "description": "Redis password", "required": true, "secret": true, "secretRef": "REDIS_PASSWORD" }
+        {
+          "name": "REDIS_PASSWORD",
+          "description": "Redis password",
+          "required": true,
+          "secret": true,
+          "secretRef": "REDIS_PASSWORD"
+        }
       ],
-      "volumes": ["jarvis-redis-data:/data"]
+      "volumes": [
+        "jarvis-redis-data:/data"
+      ]
+    },
+    {
+      "id": "minio",
+      "name": "MinIO",
+      "description": "S3-compatible object store \u2014 holds uploaded images for services that hand them between workers by URI. Provisioned only when a selected service needs one.",
+      "image": "minio/minio:latest",
+      "port": 9000,
+      "consolePort": 9001,
+      "command": "server /data --console-address \":9001\"",
+      "envVars": [
+        {
+          "name": "MINIO_ROOT_USER",
+          "description": "MinIO root user",
+          "required": true,
+          "secret": true,
+          "secretRef": "MINIO_ROOT_USER"
+        },
+        {
+          "name": "MINIO_ROOT_PASSWORD",
+          "description": "MinIO root password",
+          "required": true,
+          "secret": true,
+          "secretRef": "MINIO_ROOT_PASSWORD"
+        }
+      ],
+      "volumes": [
+        "jarvis-minio-data:/data"
+      ]
     },
     {
       "id": "loki",
       "name": "Loki",
-      "description": "Logging database — collects and indexes logs from all services",
+      "description": "Logging database \u2014 collects and indexes logs from all services",
       "image": "grafana/loki:2.9.0",
       "port": 3100,
       "envVars": [],
-      "volumes": ["jarvis-loki-data:/loki"]
+      "volumes": [
+        "jarvis-loki-data:/loki"
+      ]
     },
     {
       "id": "grafana",
       "name": "Grafana",
-      "description": "Monitoring dashboard — visualize logs and service health metrics",
+      "description": "Monitoring dashboard \u2014 visualize logs and service health metrics",
       "image": "grafana/grafana:latest",
       "port": 3000,
       "envVars": [
-        { "name": "GF_SECURITY_ADMIN_PASSWORD", "description": "Grafana admin password", "required": true, "secret": true, "secretRef": "GRAFANA_ADMIN_PASSWORD" }
+        {
+          "name": "GF_SECURITY_ADMIN_PASSWORD",
+          "description": "Grafana admin password",
+          "required": true,
+          "secret": true,
+          "secretRef": "GRAFANA_ADMIN_PASSWORD"
+        }
       ],
-      "volumes": ["jarvis-grafana-data:/var/lib/grafana"]
+      "volumes": [
+        "jarvis-grafana-data:/var/lib/grafana"
+      ]
     },
     {
       "id": "mosquitto",
@@ -307,7 +905,9 @@
       "image": "eclipse-mosquitto:2.0",
       "port": 1884,
       "envVars": [],
-      "volumes": ["jarvis-mosquitto-data:/mosquitto/data"]
+      "volumes": [
+        "jarvis-mosquitto-data:/mosquitto/data"
+      ]
     }
   ]
 }

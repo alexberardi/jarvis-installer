@@ -47,6 +47,12 @@ export interface ModelPreset {
   hfFilename?: string;
 }
 
+/** An object-store bucket a service needs to exist before it starts. */
+export interface ObjectStoreRequirement {
+  /** Bucket name, created at install time. */
+  bucket: string;
+}
+
 export interface ServiceDefinition {
   id: string;
   name: string;
@@ -59,6 +65,15 @@ export interface ServiceDefinition {
   envVars: EnvVar[];
   /** Database name this service needs (created by init-db.sh) */
   database?: string;
+  /**
+   * Object-store bucket this service needs, created at install time by the
+   * `minio-init` one-shot.
+   *
+   * MinIO does NOT create buckets on demand: the first upload fails with a
+   * config-shaped error while the server sits there running perfectly, which
+   * reads as a broken build rather than a missing bucket.
+   */
+  objectStore?: ObjectStoreRequirement;
   /** DATABASE_URL driver prefix (default: "postgresql://") */
   dbDriverPrefix?: string;
   /** Selectable model options (e.g., whisper model sizes) */
@@ -101,6 +116,17 @@ export interface InfrastructureDefinition {
   port: number;
   envVars: EnvVar[];
   volumes: string[];
+  /**
+   * A second published port, for infrastructure with a web console of its own
+   * (MinIO's is on 9001). Bound to localhost like the data port.
+   */
+  consolePort?: number;
+  /**
+   * Launch command, when the image needs one. Was an `if (infra.id === ...)`
+   * branch in the generator for redis; declaring it here means the next piece of
+   * infrastructure that needs one does not add a third branch.
+   */
+  command?: string;
 }
 
 export interface ServiceRegistry {

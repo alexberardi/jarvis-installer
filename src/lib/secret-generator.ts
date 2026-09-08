@@ -30,6 +30,15 @@ export const SECRET_KEYS = [
   // the persist step (save_memory, transcript mark_processed, inbox delivery)
   // never runs. No 'PASSWORD' in the name -> 32 bytes / 64 hex.
   "JARVIS_ADAPTER_CALLBACK_TOKEN",
+  // MinIO's root credentials. Generated rather than defaulted: minio/minio is
+  // the documented default everyone reaches for, and the console it unlocks is
+  // every uploaded image in the install. The 'user' is an access key, so a
+  // random value is the right shape for it -- both are in the generated .env if
+  // someone needs to sign in to the console.
+  "MINIO_ROOT_USER",
+  "MINIO_ROOT_PASSWORD",
+  // X-Admin-Secret for the recipes static-data seed endpoints.
+  "RECIPES_ADMIN_SECRET",
 ] as const;
 
 export type SecretKey = (typeof SECRET_KEYS)[number];
