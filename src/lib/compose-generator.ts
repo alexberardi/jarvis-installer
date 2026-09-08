@@ -218,6 +218,10 @@ export function generateCompose(state: WizardState, registry: ServiceRegistry): 
   for (const inf of infra) {
     lines.push("");
     lines.push(...generateInfraBlock(inf, state));
+    if (inf.id === "minio") {
+      lines.push("");
+      lines.push(...generateMinioInitBlock(allEnabled));
+    }
   }
 
   // Application services (and any sibling workers)
@@ -263,6 +267,51 @@ export function generateCompose(state: WizardState, registry: ServiceRegistry): 
   return lines.join("\n");
 }
 
+/**
+ * A one-shot that creates the buckets the enabled services asked for.
+ *
+ * MinIO does NOT create a bucket on first write. Without this the object store
+ * runs perfectly and the first upload fails with a config-shaped error, which
+ * reads as a broken build rather than a missing bucket -- it is exactly how the
+ * recipes photo import failed for days while MinIO sat there healthy.
+ *
+ * `mc mb --ignore-existing` is idempotent, so this is safe on every `up`.
+ */
+function generateMinioInitBlock(enabled: ServiceDefinition[]): string[] {
+  const buckets = [
+    ...new Set(
+      enabled.map((s) => s.objectStore?.bucket).filter((b): b is string => Boolean(b)),
+    ),
+  ];
+
+  return [
+    "  minio-init:",
+    "    image: minio/mc:latest",
+    "    container_name: jarvis-minio-init",
+    "    depends_on:",
+    "      - minio",
+    // A literal block, not a folded scalar wrapping `sh -c "..."`. Folding
+    // joins the lines with spaces and the inner quotes then collide with the
+    // outer pair, so a credential containing a space or a quote breaks the
+    // command. `$$` is compose's escape: the SHELL expands these, not compose.
+    '    entrypoint: ["/bin/sh", "-c"]',
+    "    command:",
+    "      - |",
+    '        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do',
+    "          sleep 2",
+    "        done",
+    ...buckets.map((b) => `        mc mb --ignore-existing local/${b}`),
+    "    environment:",
+    "      MINIO_ROOT_USER: ${MINIO_ROOT_USER}",
+    "      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}",
+    "    networks:",
+    "      - jarvis",
+    // Not unless-stopped: it does its work and exits 0, and a restart policy
+    // would have compose recreate it forever.
+    "    restart: on-failure",
+  ];
+}
+
 function generateInfraBlock(
   infra: InfrastructureDefinition,
   state: WizardState,
@@ -279,6 +328,13 @@ function generateInfraBlock(
     const bindPrefix = infraBindPrefix(infra.id);
     lines.push("    ports:");
     lines.push(`      - "${bindPrefix}\${${portVar}:-${hostPort}}:${infra.port}"`);
+    if (infra.consolePort) {
+      // Bound the same way as the data port: a console reachable from the LAN
+      // is a login form for the object store holding everyone's uploads.
+      lines.push(
+        `      - "${bindPrefix}\${${portVar}_CONSOLE:-${infra.consolePort}}:${infra.consolePort}"`,
+      );
+    }
   }
 
   // Environment
@@ -294,9 +350,10 @@ function generateInfraBlock(
     }
   }
 
-  // Redis needs a command for password auth
-  if (infra.id === "redis") {
-    lines.push("    command: redis-server --requirepass \${REDIS_PASSWORD}");
+  // Declared on the infrastructure entry rather than branched on here. Redis
+  // needs one for password auth, MinIO to point the server at its data dir.
+  if (infra.command) {
+    lines.push(`    command: ${infra.command}`);
   }
 
   // Postgres needs healthcheck and init-db mount
