@@ -8,7 +8,9 @@
  */
 import { describe, expect, it } from "vitest";
 import registry from "../../public/service-registry.json";
+import { parse } from "yaml";
 import { generateCompose } from "../../src/lib/compose-generator";
+import { generateComposeExport } from "../../src/lib/compose-export-generator";
 import { getRequiredInfrastructure } from "../../src/lib/service-registry";
 import { makeState } from "../helpers/make-state";
 
@@ -96,5 +98,55 @@ describe("the recipes services", () => {
   it("run their queue workers alongside the API", () => {
     expect(yaml).toContain("jarvis-recipes-worker:");
     expect(yaml).toContain("jarvis-ocr-worker:");
+  });
+});
+
+// ── the export path ──────────────────────────────────────────────────────────
+//
+// There are TWO generators over the same registry: the admin SYNC path
+// (generateCompose, above) and the installer's own artifact
+// (generateComposeExport). Everything above tested only the first, so MinIO went
+// out with the export emitting `depends_on: minio` and no minio service --
+// `docker compose config` rejected the whole project, and only install-e2e saw
+// it.
+
+describe("the exported artifact", () => {
+  const exported = () =>
+    generateComposeExport(
+      makeState({
+        enabledModules: ["jarvis-recipes-server", "jarvis-ocr-service"],
+      } as any),
+      registry as any,
+    );
+
+  it("emits the object store the recipes services depend on", () => {
+    const yaml = exported();
+    expect(yaml).toContain("  minio:");
+    expect(yaml).toContain("minio/minio:latest");
+  });
+
+  it("creates the bucket in the export too", () => {
+    expect(exported()).toContain("mc mb --ignore-existing local/jarvis-recipes");
+  });
+
+  it("never depends on a service it did not emit", () => {
+    // The general invariant, not just for MinIO. This is exactly what
+    // `docker compose config` rejects, and the only reason it took an e2e run
+    // to notice is that nothing asserted it here.
+    const doc = parse(exported()) as { services: Record<string, any> };
+    const defined = new Set(Object.keys(doc.services));
+
+    for (const [name, service] of Object.entries(doc.services)) {
+      const deps = Array.isArray(service.depends_on)
+        ? service.depends_on
+        : Object.keys(service.depends_on ?? {});
+      for (const dep of deps) {
+        expect(defined, `${name} depends on undefined service "${dep}"`).toContain(dep);
+      }
+    }
+  });
+
+  it("is valid YAML", () => {
+    expect(() => parse(exported())).not.toThrow();
   });
 });

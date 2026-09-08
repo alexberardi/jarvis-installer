@@ -42,6 +42,8 @@ interface SecretsMap {
   modelServiceToken: string;
   mqttPassword: string;
   dbUser: string;
+  minioRootUser: string;
+  minioRootPassword: string;
 }
 
 /**
@@ -98,6 +100,8 @@ export function generateComposeExport(
     adminApiKey: resolveSecret("ADMIN_API_KEY"),
     grafanaPassword: resolveSecret("GRAFANA_ADMIN_PASSWORD"),
     modelServiceToken: resolveSecret("MODEL_SERVICE_TOKEN"),
+    minioRootUser: resolveSecret("MINIO_ROOT_USER"),
+    minioRootPassword: resolveSecret("MINIO_ROOT_PASSWORD"),
     mqttPassword: resolveSecret("MQTT_PASSWORD"),
     dbUser: state.dbUser || "jarvis",
   };
@@ -188,6 +192,67 @@ export function generateComposeExport(
     lines.push("    networks:");
     lines.push("      - jarvis");
     lines.push("    restart: unless-stopped");
+  }
+
+  // MinIO — the object store, for services that hand images between workers by
+  // URI. Emitted here as well as in the SYNC generator: they are separate code
+  // paths over the same registry, and a service depending on infrastructure only
+  // ONE of them knows about produces "depends on undefined service".
+  if (infra.some((i) => i.id === "minio")) {
+    const minioHostPort = state.infraPortOverrides["minio"] ?? 9000;
+    lines.push("");
+    lines.push("  minio:");
+    lines.push("    image: minio/minio:latest");
+    lines.push("    container_name: jarvis-minio");
+    lines.push("    ports:");
+    lines.push(`      - "\${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:${minioHostPort}:9000"`);
+    // The console is a login form for every uploaded image in the install; it
+    // gets the same loopback binding as the data port.
+    lines.push(`      - "\${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:${minioHostPort + 1}:9001"`);
+    lines.push("    environment:");
+    lines.push(`      MINIO_ROOT_USER: "${secrets.minioRootUser}"`);
+    lines.push(`      MINIO_ROOT_PASSWORD: "${secrets.minioRootPassword}"`);
+    lines.push('    command: server /data --console-address ":9001"');
+    lines.push("    volumes:");
+    lines.push(`      - ${storagePath}/minio:/data`);
+    lines.push("    networks:");
+    lines.push("      - jarvis");
+    lines.push("    restart: unless-stopped");
+
+    // Buckets do not create themselves. Without this the store is healthy and
+    // empty, and the first upload fails with a config-shaped error.
+    const buckets = [
+      ...new Set(
+        allEnabled
+          .map((svc) => svc.objectStore?.bucket)
+          .filter((b): b is string => Boolean(b)),
+      ),
+    ];
+    if (buckets.length > 0) {
+      lines.push("");
+      lines.push("  minio-init:");
+      lines.push("    image: minio/mc:latest");
+      lines.push("    container_name: jarvis-minio-init");
+      lines.push("    depends_on:");
+      lines.push("      - minio");
+      lines.push('    entrypoint: ["/bin/sh", "-c"]');
+      lines.push("    command:");
+      lines.push("      - |");
+      // depends_on only waits for the container to START, so mc gets connection
+      // refused on the first attempt.
+      lines.push(
+        `        until mc alias set local http://minio:9000 "${secrets.minioRootUser}" "${secrets.minioRootPassword}"; do`,
+      );
+      lines.push("          sleep 2");
+      lines.push("        done");
+      for (const bucket of buckets) {
+        lines.push(`        mc mb --ignore-existing local/${bucket}`);
+      }
+      lines.push("    networks:");
+      lines.push("      - jarvis");
+      // It exits 0 once the buckets exist; unless-stopped would recreate it.
+      lines.push("    restart: on-failure");
+    }
   }
 
   // Loki
