@@ -411,6 +411,13 @@ describe("compose-export-generator: migrate entrypoint wrapper", () => {
     "jarvis-llm-proxy-api",
     "jarvis-notifications",
     "jarvis-tts",
+    // Both ship alembic and own a database. The recipes image also migrates in
+    // its own CMD; the wrapper is belt-and-braces, and it is what keeps
+    // migration from depending on an image's CMD staying as it is -- the shape
+    // of the 2026-06 outage, where a service came up on a stale schema and only
+    // a shallow /health saw it.
+    "jarvis-recipes-server",
+    "jarvis-ocr-service",
   ];
 
   // Enable every migrate-set service so each block is present in the output.
@@ -418,6 +425,8 @@ describe("compose-export-generator: migrate entrypoint wrapper", () => {
     makeState({
       enabledModules: [
         "jarvis-logs",
+        "jarvis-recipes-server",
+        "jarvis-ocr-service",
         "jarvis-whisper-api",
         "jarvis-tts",
         "jarvis-llm-proxy-api",

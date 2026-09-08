@@ -657,6 +657,7 @@
         "jarvis-auth",
         "jarvis-config-service"
       ],
+      "migrate": true,
       "database": "jarvis_recipes",
       "dbDriverPrefix": "postgresql+psycopg2://",
       "objectStore": {
@@ -731,7 +732,11 @@
       "port": 7031,
       "image": "ghcr.io/alexberardi/jarvis-ocr-service:latest",
       "healthCheck": "/health",
+      "database": "jarvis_ocr",
+      "dbDriverPrefix": "postgresql+psycopg2://",
+      "migrate": true,
       "dependsOn": [
+        "postgres",
         "redis",
         "minio",
         "jarvis-auth",
