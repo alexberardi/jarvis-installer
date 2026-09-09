@@ -104,6 +104,21 @@ export interface ServiceDefinition {
    * entrypoint that migrates first, then execs the original CMD.
    */
   migrate?: boolean;
+  /**
+   * The command a `migrate: true` service serves with, once the migrate
+   * entrypoint has run. Required for those services, ignored for the rest.
+   *
+   * Overriding `entrypoint` CLEARS the image's CMD, so the wrapper's `exec "$@"`
+   * has nothing to run unless a command is supplied here. It lives in the
+   * registry rather than the generator because the module path is a property of
+   * the image: most services package their app at `app.main`, but jarvis-auth
+   * uses `jarvis_auth.app.main`, jarvis-recipes-server uses
+   * `jarvis_recipes.app.main`, and jarvis-llm-proxy-api serves through a
+   * supervised launcher instead of uvicorn.
+   *
+   * `{{CONTAINER_PORT}}` is substituted with the service's container port.
+   */
+  serveCommand?: string[];
   /** Sibling worker containers that share this service's image and most config. */
   workers?: WorkerDefinition[];
 }
