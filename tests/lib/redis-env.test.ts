@@ -40,6 +40,8 @@ describe("services that depend on redis can reach it", () => {
     expect(String(wiring)).not.toContain("localhost");
   });
 
+  // 30s for the same reason as the app-id test below: generating a compose with
+  // several services is bcrypt-bound and drifts near vitest's 5s default.
   it("emits a routable redis host, never the in-code localhost default", () => {
     const state = makeState({ enabledModules: redisDependents.map((s) => s.id) });
     const compose = parseYaml(generateComposeExport(state, registry));
@@ -53,7 +55,7 @@ describe("services that depend on redis can reach it", () => {
       expect(String(host)).not.toContain("localhost");
       expect(String(host)).not.toContain("127.0.0.1");
     }
-  });
+  }, 30_000);
 
   it("gives the sibling workers the same wiring", () => {
     // The workers are what actually consume the queues; they inherit the
