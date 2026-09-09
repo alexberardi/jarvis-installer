@@ -92,7 +92,11 @@ describe("the recipes services", () => {
     // Recipes fans an image out to every OCR host; a shared queue name has them
     // race and only one reads each image.
     expect(yaml).toContain("OCR_QUEUE_NAME: jarvis.ocr.jobs.linux");
-    expect(yaml).toContain("OCR_QUEUES: jarvis.ocr.jobs.linux");
+    // OCR_QUEUES is operator-settable so a second OCR host can be added per
+    // install (an Apple Vision worker on a Mac reads handwriting the Linux
+    // providers cannot). The DEFAULT must still be the queue this install's
+    // own worker consumes: adding a host stays opt-in.
+    expect(yaml).toContain("OCR_QUEUES: ${OCR_QUEUES:-jarvis.ocr.jobs.linux}");
   });
 
   it("run their queue workers alongside the API", () => {
