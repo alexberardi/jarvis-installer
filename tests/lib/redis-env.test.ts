@@ -116,6 +116,9 @@ describe("services that depend on config-service can find it", () => {
 // failed with "JARVIS_APP_ID and JARVIS_APP_KEY must be set". This export
 // generator has always emitted the literal service id; this pins that.
 describe("app-to-app credentials are complete", () => {
+  // 30s: this enables every service at once, and the export generator
+  // bcrypt-hashes an app key per service. That is ~6s on CI's runners, over the
+  // 5s default -- the test timed out before the assertion ever ran.
   it("never emits an app key without an app id", () => {
     const state = makeState({ enabledModules: registry.services.map((s) => s.id) });
     const compose = parseYaml(generateComposeExport(state, registry));
@@ -130,5 +133,5 @@ describe("app-to-app credentials are complete", () => {
       expect(appId, `${id} has an app key but no app id`).toBeTruthy();
       expect(String(appId), `${id} defers its app id to .env`).not.toContain("${");
     }
-  });
+  }, 30_000);
 });
