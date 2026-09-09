@@ -717,6 +717,12 @@
       },
       "envVars": [
         {
+          "name": "JARVIS_CONFIG_URL",
+          "description": "Config service URL",
+          "required": false,
+          "default": "http://jarvis-config-service:7700"
+        },
+        {
           "name": "ADMIN_SECRET",
           "description": "Secret for the static-data seed endpoints",
           "required": true,
@@ -822,6 +828,12 @@
         "jarvis-config-service"
       ],
       "envVars": [
+        {
+          "name": "JARVIS_CONFIG_URL",
+          "description": "Config service URL",
+          "required": false,
+          "default": "http://jarvis-config-service:7700"
+        },
         {
           "name": "OCR_ENABLE_RAPIDOCR",
           "description": "Enable the RapidOCR engine",
