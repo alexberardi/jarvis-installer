@@ -745,24 +745,33 @@ function generateExportServiceBlock(
     for (const line of generateConfigSeedScript(allEnabled, containerPort, state).split("\n")) {
       lines.push(`        ${line}`);
     }
-  } else if (service.id === "jarvis-llm-proxy-api") {
-    // The migrate entrypoint above clears the image CMD, so llm-proxy MUST keep
-    // an explicit command — and it MUST be the image's supervised launcher
-    // scripts/serve.sh (API in the foreground + model service respawned with
-    // backoff), NOT the old unsupervised `uvicorn model_service & exec uvicorn
-    // main` pattern: when the model service crashed natively, nothing respawned
-    // it and the API 503'd forever (2026-07-02 outage). serve.sh defaults
-    // SERVER_PORT=7704 / MODEL_SERVICE_PORT=7705, matching what we publish.
-    lines.push('    command: ["bash", "scripts/serve.sh"]');
   } else if (service.migrate) {
     // Overriding `entrypoint` CLEARS the image's CMD, so a migrate service with
     // no explicit command would `exec ""` (empty $@) and exit right after
-    // migrating — the container restart-loops with no server. Re-emit the
-    // image's serve command so the migrate entrypoint execs it. These services
-    // (command-center, whisper, notifications) all serve `app.main:app`.
-    lines.push(
-      `    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${containerPort}"]`,
+    // migrating — the container restart-loops with no server.
+    //
+    // The command is registry data, never inferred from the service id, because
+    // the module path belongs to the image and the services disagree about it.
+    // llm-proxy's `bash scripts/serve.sh` is its supervised launcher (API in the
+    // foreground + model service respawned with backoff) and MUST NOT become the
+    // old unsupervised `uvicorn model_service & exec uvicorn main`: when the
+    // model service crashed natively nothing respawned it and the API 503'd
+    // forever (2026-07-02 outage). serve.sh defaults SERVER_PORT=7704 /
+    // MODEL_SERVICE_PORT=7705, matching what we publish. jarvis-recipes-server
+    // packages its app at `jarvis_recipes.app.main`; the id-chain this replaces
+    // handed it the generic `app.main:app` and it reached prod crash-looping on
+    // `ModuleNotFoundError: No module named 'app'`.
+    if (!service.serveCommand?.length) {
+      throw new Error(
+        `Service "${service.id}" sets migrate: true but declares no serveCommand. ` +
+          `The migrate entrypoint clears the image CMD, so the container would ` +
+          `exec "" and exit immediately after migrating.`,
+      );
+    }
+    const argv = service.serveCommand.map((arg) =>
+      arg.replace("{{CONTAINER_PORT}}", String(containerPort)),
     );
+    lines.push(`    command: [${argv.map((a) => JSON.stringify(a)).join(", ")}]`);
   }
 
   // Dependencies
