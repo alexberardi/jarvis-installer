@@ -46,6 +46,9 @@ describe("migrate services declare their own serve command", () => {
     expect(() => generateComposeExport(state, broken)).toThrow(/serveCommand/);
   });
 
+  // 30s: enables every migrate service at once, and the export generator
+  // bcrypt-hashes an app key per service. It was landing at ~5.4s on CI,
+  // just over vitest's 5s default -- passing or failing on runner speed.
   it("every emitted migrate service has a command", () => {
     const state = makeState({ enabledModules: migrateServices.map((s) => s.id) });
     const compose = parseYaml(generateComposeExport(state, registry));
@@ -59,7 +62,7 @@ describe("migrate services declare their own serve command", () => {
       expect(block.command, `${service.id} would exec "" and exit`).toBeTruthy();
       expect(block.command.length).toBeGreaterThan(0);
     }
-  });
+  }, 30_000);
 
   it("serves recipes-server from jarvis_recipes.app.main, not app.main", () => {
     const state = makeState({ enabledModules: ["jarvis-recipes-server"] });

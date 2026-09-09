@@ -40,6 +40,8 @@ describe("services that depend on redis can reach it", () => {
     expect(String(wiring)).not.toContain("localhost");
   });
 
+  // 30s for the same reason as the app-id test below: generating a compose with
+  // several services is bcrypt-bound and drifts near vitest's 5s default.
   it("emits a routable redis host, never the in-code localhost default", () => {
     const state = makeState({ enabledModules: redisDependents.map((s) => s.id) });
     const compose = parseYaml(generateComposeExport(state, registry));
@@ -53,7 +55,7 @@ describe("services that depend on redis can reach it", () => {
       expect(String(host)).not.toContain("localhost");
       expect(String(host)).not.toContain("127.0.0.1");
     }
-  });
+  }, 30_000);
 
   it("gives the sibling workers the same wiring", () => {
     // The workers are what actually consume the queues; they inherit the
@@ -106,4 +108,32 @@ describe("services that depend on config-service can find it", () => {
     ).toBeTruthy();
     expect(String(env.JARVIS_CONFIG_URL)).not.toContain("localhost");
   });
+});
+
+// App-to-app auth needs BOTH halves. The admin generator used to defer the id
+// to a ${JARVIS_APP_ID_<SUFFIX>:-} slot that env-generator writes empty and only
+// registration fills -- and registration injects a value only when
+// config-service CREATES the app client. A service whose client already existed
+// re-registered with no key returned, so its id stayed empty and every call
+// failed with "JARVIS_APP_ID and JARVIS_APP_KEY must be set". This export
+// generator has always emitted the literal service id; this pins that.
+describe("app-to-app credentials are complete", () => {
+  // 30s: this enables every service at once, and the export generator
+  // bcrypt-hashes an app key per service. That is ~6s on CI's runners, over the
+  // 5s default -- the test timed out before the assertion ever ran.
+  it("never emits an app key without an app id", () => {
+    const state = makeState({ enabledModules: registry.services.map((s) => s.id) });
+    const compose = parseYaml(generateComposeExport(state, registry));
+
+    const withKey = Object.entries<{ environment?: Record<string, string> }>(
+      compose.services,
+    ).filter(([, svc]) => svc.environment?.JARVIS_APP_KEY !== undefined);
+    expect(withKey.length).toBeGreaterThan(0);
+
+    for (const [id, svc] of withKey) {
+      const appId = svc.environment!.JARVIS_APP_ID;
+      expect(appId, `${id} has an app key but no app id`).toBeTruthy();
+      expect(String(appId), `${id} defers its app id to .env`).not.toContain("${");
+    }
+  }, 30_000);
 });
