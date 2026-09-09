@@ -107,3 +107,28 @@ describe("services that depend on config-service can find it", () => {
     expect(String(env.JARVIS_CONFIG_URL)).not.toContain("localhost");
   });
 });
+
+// App-to-app auth needs BOTH halves. The admin generator used to defer the id
+// to a ${JARVIS_APP_ID_<SUFFIX>:-} slot that env-generator writes empty and only
+// registration fills -- and registration injects a value only when
+// config-service CREATES the app client. A service whose client already existed
+// re-registered with no key returned, so its id stayed empty and every call
+// failed with "JARVIS_APP_ID and JARVIS_APP_KEY must be set". This export
+// generator has always emitted the literal service id; this pins that.
+describe("app-to-app credentials are complete", () => {
+  it("never emits an app key without an app id", () => {
+    const state = makeState({ enabledModules: registry.services.map((s) => s.id) });
+    const compose = parseYaml(generateComposeExport(state, registry));
+
+    const withKey = Object.entries<{ environment?: Record<string, string> }>(
+      compose.services,
+    ).filter(([, svc]) => svc.environment?.JARVIS_APP_KEY !== undefined);
+    expect(withKey.length).toBeGreaterThan(0);
+
+    for (const [id, svc] of withKey) {
+      const appId = svc.environment!.JARVIS_APP_ID;
+      expect(appId, `${id} has an app key but no app id`).toBeTruthy();
+      expect(String(appId), `${id} defers its app id to .env`).not.toContain("${");
+    }
+  });
+});
