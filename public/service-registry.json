@@ -723,6 +723,13 @@
           "default": "http://jarvis-config-service:7700"
         },
         {
+          "name": "AUTH_SECRET_KEY",
+          "description": "JWT signing key (must match jarvis-auth)",
+          "required": true,
+          "secret": true,
+          "secretRef": "AUTH_SECRET_KEY"
+        },
+        {
           "name": "ADMIN_SECRET",
           "description": "Secret for the static-data seed endpoints",
           "required": true,
