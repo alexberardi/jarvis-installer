@@ -895,6 +895,18 @@ print("Auth seed complete")
 exec uvicorn jarvis_auth.app.main:app --host 0.0.0.0 --port ${authContainerPort}`;
 }
 
+/**
+ * Make a value safe to sit inside a single-quoted shell string.
+ *
+ * `'"'"'` is the standard idiom: close the quote, emit a double-quoted
+ * apostrophe, reopen. Needed because the seed scripts run as
+ * `python -c '<program>'`, where one apostrophe in interpolated registry text
+ * turns the rest of the program into shell.
+ */
+function shellSingleQuoteSafe(value: string): string {
+  return value.replace(/'/g, `'"'"'`);
+}
+
 function generateConfigSeedScript(
   allEnabled: ServiceDefinition[],
   configContainerPort: number,
@@ -911,9 +923,21 @@ function generateConfigSeedScript(
   for (const svc of allEnabled) {
     const cPort = getContainerPort(svc);
     const publishedPort = state.portOverrides[svc.id] ?? svc.port;
-    const desc = svc.description.replace(/"/g, '\\"');
+    // Escape for BOTH layers, in this order. The inner Python string is
+    // double-quoted, so a literal `"` needs escaping there -- but the whole
+    // program runs as `python -c '...'`, so a literal `'` closes the SHELL
+    // quote and everything after it is parsed as shell. A registry description
+    // reading "see the repo's DEPLOYMENT.md" took the config service down with
+    //
+    //   sh: 19: Syntax error: ")" unexpected
+    //
+    // which crash-looped it after migrations succeeded, so the whole stack came
+    // up and then failed discovery. Shell escaping must come last: it emits
+    // double quotes of its own that Python escaping must not touch.
+    const desc = shellSingleQuoteSafe(svc.description.replace(/"/g, '\\"'));
+    const healthPath = shellSingleQuoteSafe(svc.healthCheck);
     serviceLines.push(
-      `    ("${svc.id}", "${svc.id}", ${cPort}, "http", "${svc.healthCheck}", "${desc}", "localhost", ${publishedPort}),`,
+      `    ("${svc.id}", "${svc.id}", ${cPort}, "http", "${healthPath}", "${desc}", "localhost", ${publishedPort}),`,
     );
   }
 
