@@ -126,7 +126,10 @@ describe("the exported artifact", () => {
   it("emits the object store the recipes services depend on", () => {
     const yaml = exported();
     expect(yaml).toContain("  minio:");
-    expect(yaml).toContain("minio/minio:latest");
+    // The repository and version live in tests/lib/minio-image.test.ts, which
+    // asserts the property (quay.io, pinned release) rather than a literal.
+    // Pinning the literal here is what made a registry move a two-file change.
+    expect(yaml).toMatch(/image: \S*minio\/minio:\S+/);
   });
 
   it("creates the bucket in the export too", () => {

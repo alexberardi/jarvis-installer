@@ -202,7 +202,7 @@ export function generateComposeExport(
     const minioHostPort = state.infraPortOverrides["minio"] ?? 9000;
     lines.push("");
     lines.push("  minio:");
-    lines.push("    image: minio/minio:latest");
+    lines.push("    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z");
     lines.push("    container_name: jarvis-minio");
     lines.push("    ports:");
     lines.push(`      - "\${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:${minioHostPort}:9000"`);
@@ -231,7 +231,7 @@ export function generateComposeExport(
     if (buckets.length > 0) {
       lines.push("");
       lines.push("  minio-init:");
-      lines.push("    image: minio/mc:latest");
+      lines.push("    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z");
       lines.push("    container_name: jarvis-minio-init");
       lines.push("    depends_on:");
       lines.push("      - minio");
