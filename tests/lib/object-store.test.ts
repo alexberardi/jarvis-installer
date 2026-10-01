@@ -1,10 +1,13 @@
 /**
- * MinIO as optional infrastructure, and the bucket that has to exist.
+ * The object store as optional infrastructure, and the bucket that has to exist.
  *
- * MinIO does not create a bucket on first write. Without the init one-shot the
- * object store runs perfectly and the first upload fails with a config-shaped
- * error — which is precisely how recipes photo import failed for days while
- * MinIO sat there healthy and empty.
+ * The S3 API does not create a bucket on first write. Without the init one-shot
+ * the object store runs perfectly and the first upload fails with a
+ * config-shaped error — which is precisely how recipes photo import failed for
+ * days while the store sat there healthy and empty.
+ *
+ * The store is SeaweedFS as of 2026-09-30. MinIO archived the OSS project and
+ * closed every distribution channel; see prds/minio-eol-object-store.md.
  */
 import { describe, expect, it } from "vitest";
 import registry from "../../public/service-registry.json";
@@ -20,57 +23,93 @@ const compose = (modules: string[]) =>
 const infraIds = (modules: string[]) =>
   getRequiredInfrastructure(registry as any, modules).map((i) => i.id);
 
-describe("MinIO is provisioned only when something needs it", () => {
+describe("the object store is provisioned only when something needs it", () => {
   it("is absent from a stack that stores no objects", () => {
     // "Optional infrastructure" is the existing dependsOn mechanism, not a new
     // flag: nothing declares it, nothing runs it.
-    expect(infraIds(["jarvis-auth"])).not.toContain("minio");
-    expect(compose(["jarvis-auth"])).not.toContain("minio/minio");
+    expect(infraIds(["jarvis-auth"])).not.toContain("seaweedfs");
+    expect(compose(["jarvis-auth"])).not.toContain("seaweedfs:");
   });
 
   it("is pulled in by a service that declares a bucket", () => {
-    expect(infraIds(["jarvis-recipes-server"])).toContain("minio");
+    expect(infraIds(["jarvis-recipes-server"])).toContain("seaweedfs");
   });
 });
 
 describe("the generated object store", () => {
   const yaml = compose(["jarvis-recipes-server", "jarvis-ocr-service"]);
 
-  it("publishes the console on its own port", () => {
-    expect(yaml).toContain("${MINIO_PORT_CONSOLE:-9001}:9001");
-  });
-
-  it("binds both ports to localhost", () => {
-    // A console reachable from the LAN is a login form for every uploaded image
-    // in the install.
-    for (const line of yaml.split("\n").filter((l) => l.includes(":9000") || l.includes(":9001"))) {
+  it("binds the S3 port to localhost", () => {
+    // The S3 API reads and writes every uploaded image in the install; it has
+    // no business being reachable from the LAN by default.
+    for (const line of yaml.split("\n").filter((l) => l.includes(":8333"))) {
       if (line.trim().startsWith("- ")) {
         expect(line).toContain("${JARVIS_INFRA_BIND_HOST:-127.0.0.1}");
       }
     }
   });
 
-  it("creates the bucket each service asked for", () => {
-    expect(yaml).toContain("mc mb --ignore-existing local/jarvis-recipes");
+  it("publishes no second port", () => {
+    // MinIO shipped a web console on 9001 and it had to be bound as carefully
+    // as the data port. SeaweedFS serves no S3 console, so that login surface
+    // is simply gone — assert it stays gone rather than silently returning.
+    expect(yaml).not.toContain(":9001");
+    expect(yaml).not.toContain("PORT_CONSOLE");
   });
 
-  it("waits for MinIO rather than assuming it is up", () => {
-    // compose `depends_on` only waits for the container to START. mc runs
-    // immediately and gets connection refused.
-    expect(yaml).toMatch(/until mc alias set local[\s\S]*?sleep 2/);
-  });
-
-  it("quotes the credentials so a password with spaces survives", () => {
-    // Generated secrets are hex today, but the value is operator-editable and a
-    // folded `sh -c "..."` block collided its own quotes.
-    expect(yaml).toContain('"$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"');
+  it("writes its S3 credentials from the generated secrets", () => {
+    // `weed -s3.config` takes a FILE PATH, not env vars, so the identity file
+    // is materialised at start. `$$` is compose's escape: the SHELL expands
+    // these, not compose.
+    expect(yaml).toContain("$$OBJECT_STORE_ACCESS_KEY");
+    expect(yaml).toContain("$$OBJECT_STORE_SECRET_KEY");
+    expect(yaml).toContain("/etc/seaweedfs/s3.json");
     expect(yaml).toContain('entrypoint: ["/bin/sh", "-c"]');
+  });
+
+  it("gives the store enough volume slots to actually accept writes", () => {
+    // -volume.max defaults to 8, and SeaweedFS makes a separate volume
+    // collection PER BUCKET, growing them 7 at a time. A single-node install
+    // exhausts the slots and every PutObject returns InternalError
+    // ("No writable volumes ... Not enough data nodes found!"). `0` is a trap:
+    // it auto-sizes from free disk / volume size and resolved to 2 in a
+    // container. Verified 2026-10-01 by migrating a seeded MinIO bucket --
+    // 8 of 9 objects failed until this was set.
+    expect(yaml).toContain("-volume.max=64");
+    expect(yaml).not.toContain("-volume.max=0");
+  });
+
+  it("creates the bucket each service asked for", () => {
+    expect(yaml).toContain("s3.bucket.create -name jarvis-recipes");
+  });
+
+  it("verifies the bucket instead of trusting the exit code", () => {
+    // `s3.bucket.create` prints "already exists" and STILL EXITS 0 — which
+    // means it also exits 0 when it genuinely fails. Verified against the real
+    // image 2026-09-30. Without this check the one-shot goes green having
+    // created nothing, which is the exact failure the one-shot exists to stop.
+    expect(yaml).toMatch(/s3\.bucket\.list[\s\S]*?grep -q "jarvis-recipes"/);
+    expect(yaml).toContain("exit 1");
+  });
+
+  it("waits for the store rather than assuming it is up", () => {
+    // compose `depends_on` only waits for the container to START. The one-shot
+    // runs immediately and gets connection refused.
+    expect(yaml).toMatch(/until echo "s3\.bucket\.list"[\s\S]*?sleep 2/);
+  });
+
+  it("runs the init one-shot on the store's own image", () => {
+    // `weed shell` ships in the server image, so there is no second image to
+    // pin. The old `mc` one-shot was half the MinIO blast radius — its Docker
+    // Hub repo vanished a day after the server's did.
+    const doc = parse(yaml) as { services: Record<string, { image?: string }> };
+    expect(doc.services["seaweedfs-init"]?.image).toBe(doc.services["seaweedfs"]?.image);
   });
 
   it("does not restart the init one-shot forever", () => {
     // It does its work and exits 0; unless-stopped would have compose recreate
     // it in a loop.
-    const block = yaml.split("\n\n").find((b) => b.includes("minio-init:")) ?? "";
+    const block = yaml.split("\n\n").find((b) => b.includes("seaweedfs-init:")) ?? "";
     expect(block).toContain("restart: on-failure");
     expect(block).not.toContain("restart: unless-stopped");
   });
@@ -79,12 +118,12 @@ describe("the generated object store", () => {
 describe("the recipes services", () => {
   const yaml = compose(["jarvis-recipes-server", "jarvis-ocr-service"]);
 
-  it("point at MinIO over the compose network", () => {
-    expect(yaml).toContain("S3_ENDPOINT_URL: http://minio:9000");
+  it("point at the object store over the compose network", () => {
+    expect(yaml).toContain("S3_ENDPOINT_URL: http://seaweedfs:8333");
   });
 
-  it("use path-style addressing, which MinIO requires", () => {
-    // Virtual-host style is the boto3 default and MinIO does not serve it.
+  it("use path-style addressing, which SeaweedFS requires", () => {
+    // Virtual-host style is the boto3 default and SeaweedFS does not serve it.
     expect(yaml).toContain("S3_FORCE_PATH_STYLE: true");
   });
 
@@ -109,10 +148,10 @@ describe("the recipes services", () => {
 //
 // There are TWO generators over the same registry: the admin SYNC path
 // (generateCompose, above) and the installer's own artifact
-// (generateComposeExport). Everything above tested only the first, so MinIO went
-// out with the export emitting `depends_on: minio` and no minio service --
-// `docker compose config` rejected the whole project, and only install-e2e saw
-// it.
+// (generateComposeExport). Everything above tested only the first, so the object
+// store once went out with the export emitting `depends_on: minio` and no minio
+// service — `docker compose config` rejected the whole project, and only
+// install-e2e saw it.
 
 describe("the exported artifact", () => {
   const exported = () =>
@@ -125,21 +164,25 @@ describe("the exported artifact", () => {
 
   it("emits the object store the recipes services depend on", () => {
     const yaml = exported();
-    expect(yaml).toContain("  minio:");
-    // The repository and version live in tests/lib/minio-image.test.ts, which
-    // asserts the property (quay.io, pinned release) rather than a literal.
+    expect(yaml).toContain("  seaweedfs:");
+    // The repository and pinning live in tests/lib/object-store-image.test.ts,
+    // which asserts the property (pinned by digest) rather than a literal.
     // Pinning the literal here is what made a registry move a two-file change.
-    expect(yaml).toMatch(/image: \S*minio\/minio:\S+/);
+    expect(yaml).toMatch(/image: \S*seaweedfs\S+/);
   });
 
   it("creates the bucket in the export too", () => {
-    expect(exported()).toContain("mc mb --ignore-existing local/jarvis-recipes");
+    expect(exported()).toContain("s3.bucket.create -name jarvis-recipes");
+  });
+
+  it("verifies the bucket in the export too", () => {
+    expect(exported()).toMatch(/s3\.bucket\.list[\s\S]*?grep -q "jarvis-recipes"/);
   });
 
   it("never depends on a service it did not emit", () => {
-    // The general invariant, not just for MinIO. This is exactly what
-    // `docker compose config` rejects, and the only reason it took an e2e run
-    // to notice is that nothing asserted it here.
+    // The general invariant, not just for the object store. This is exactly
+    // what `docker compose config` rejects, and the only reason it took an e2e
+    // run to notice is that nothing asserted it here.
     const doc = parse(exported()) as { services: Record<string, any> };
     const defined = new Set(Object.keys(doc.services));
 

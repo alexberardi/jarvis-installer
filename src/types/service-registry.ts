@@ -132,16 +132,30 @@ export interface InfrastructureDefinition {
   envVars: EnvVar[];
   volumes: string[];
   /**
-   * A second published port, for infrastructure with a web console of its own
-   * (MinIO's is on 9001). Bound to localhost like the data port.
+   * A second published port, for infrastructure with a web console of its own.
+   * Bound to localhost like the data port. Nothing declares one today -- the
+   * object store that did (MinIO, console on 9001) is gone; SeaweedFS serves no
+   * equivalent S3 console.
    */
   consolePort?: number;
   /**
    * Launch command, when the image needs one. Was an `if (infra.id === ...)`
    * branch in the generator for redis; declaring it here means the next piece of
    * infrastructure that needs one does not add a third branch.
+   *
+   * A command containing newlines is emitted as a YAML literal block, so a
+   * multi-line bootstrap script survives the generator intact. Use `$$` for
+   * anything the SHELL should expand -- compose eats a single `$`.
    */
   command?: string;
+  /**
+   * Entrypoint override, when the image needs a shell before its real command.
+   * SeaweedFS needs one: `-s3.config` takes a path, not env vars, so the
+   * credential file has to be materialised from the generated secrets at start.
+   * Declared here for the same reason as `command` -- so the next image needing
+   * a bootstrap does not add a branch to the generator.
+   */
+  entrypoint?: string[];
 }
 
 export interface ServiceRegistry {

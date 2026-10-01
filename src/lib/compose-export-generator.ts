@@ -42,8 +42,8 @@ interface SecretsMap {
   modelServiceToken: string;
   mqttPassword: string;
   dbUser: string;
-  minioRootUser: string;
-  minioRootPassword: string;
+  objectStoreAccessKey: string;
+  objectStoreSecretKey: string;
 }
 
 /**
@@ -100,8 +100,8 @@ export function generateComposeExport(
     adminApiKey: resolveSecret("ADMIN_API_KEY"),
     grafanaPassword: resolveSecret("GRAFANA_ADMIN_PASSWORD"),
     modelServiceToken: resolveSecret("MODEL_SERVICE_TOKEN"),
-    minioRootUser: resolveSecret("MINIO_ROOT_USER"),
-    minioRootPassword: resolveSecret("MINIO_ROOT_PASSWORD"),
+    objectStoreAccessKey: resolveSecret("OBJECT_STORE_ACCESS_KEY"),
+    objectStoreSecretKey: resolveSecret("OBJECT_STORE_SECRET_KEY"),
     mqttPassword: resolveSecret("MQTT_PASSWORD"),
     dbUser: state.dbUser || "jarvis",
   };
@@ -194,27 +194,51 @@ export function generateComposeExport(
     lines.push("    restart: unless-stopped");
   }
 
-  // MinIO — the object store, for services that hand images between workers by
-  // URI. Emitted here as well as in the SYNC generator: they are separate code
-  // paths over the same registry, and a service depending on infrastructure only
-  // ONE of them knows about produces "depends on undefined service".
-  if (infra.some((i) => i.id === "minio")) {
-    const minioHostPort = state.infraPortOverrides["minio"] ?? 9000;
+  // SeaweedFS — the object store, for services that hand images between workers
+  // by URI. Emitted here as well as in the SYNC generator: they are separate
+  // code paths over the same registry, and a service depending on
+  // infrastructure only ONE of them knows about produces "depends on undefined
+  // service".
+  //
+  // Replaced MinIO 2026-09-30: MinIO archived the OSS project and pulled every
+  // distribution channel (see prds/minio-eol-object-store.md). Pinned by DIGEST
+  // rather than tag -- the 2026-09-11 breakage was an unpinned `:latest`
+  // changing behaviour underneath us, and a digest cannot move at all.
+  if (infra.some((i) => i.id === "seaweedfs")) {
+    const seaweedHostPort = state.infraPortOverrides["seaweedfs"] ?? 8333;
     lines.push("");
-    lines.push("  minio:");
-    lines.push("    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z");
-    lines.push("    container_name: jarvis-minio");
+    lines.push("  seaweedfs:");
+    lines.push(`    image: chrislusf/seaweedfs@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d`);
+    lines.push("    container_name: jarvis-seaweedfs");
     lines.push("    ports:");
-    lines.push(`      - "\${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:${minioHostPort}:9000"`);
-    // The console is a login form for every uploaded image in the install; it
-    // gets the same loopback binding as the data port.
-    lines.push(`      - "\${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:${minioHostPort + 1}:9001"`);
-    lines.push("    environment:");
-    lines.push(`      MINIO_ROOT_USER: "${secrets.minioRootUser}"`);
-    lines.push(`      MINIO_ROOT_PASSWORD: "${secrets.minioRootPassword}"`);
-    lines.push('    command: server /data --console-address ":9001"');
+    lines.push(`      - "\${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:${seaweedHostPort}:8333"`);
+    // No second port: SeaweedFS serves no S3 console, so unlike MinIO there is
+    // no extra login surface to bind.
+    lines.push('    entrypoint: ["/bin/sh", "-c"]');
+    lines.push("    command:");
+    lines.push("      - |");
+    // `-s3.config` takes a path, not env vars, so the credential file has to be
+    // written before the server starts. A literal block, not a folded scalar:
+    // folding would join these lines with spaces and collapse the script.
+    lines.push("        mkdir -p /etc/seaweedfs");
+    lines.push("        cat > /etc/seaweedfs/s3.json <<CFG");
+    lines.push(
+      `        {"identities":[{"name":"jarvis","credentials":[{"accessKey":"${secrets.objectStoreAccessKey}","secretKey":"${secrets.objectStoreSecretKey}"}],"actions":["Admin","Read","Write","List","Tagging"]}]}`,
+    );
+    // -volume.max is NOT optional. It defaults to 8, and SeaweedFS makes a
+    // separate volume collection PER BUCKET and grows them 7 at a time, so a
+    // single-node install runs out of volume slots and every PutObject returns
+    // InternalError ("No writable volumes... Not enough data nodes found!").
+    // `-volume.max=0` is worse than it reads: it auto-sizes from free disk
+    // divided by volume size and resolved to 2 in a container. Verified by
+    // migrating a seeded MinIO bucket 2026-10-01 -- 8 of 9 objects failed until
+    // this was set.
+    lines.push("        CFG");
+    lines.push(
+      "        exec weed server -dir=/data -s3 -s3.config=/etc/seaweedfs/s3.json -volume.max=64 -master.volumeSizeLimitMB=1024",
+    );
     lines.push("    volumes:");
-    lines.push(`      - ${storagePath}/minio:/data`);
+    lines.push(`      - ${storagePath}/seaweedfs:/data`);
     lines.push("    networks:");
     lines.push("      - jarvis");
     lines.push("    restart: unless-stopped");
@@ -230,23 +254,36 @@ export function generateComposeExport(
     ];
     if (buckets.length > 0) {
       lines.push("");
-      lines.push("  minio-init:");
-      lines.push("    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z");
-      lines.push("    container_name: jarvis-minio-init");
+      lines.push("  seaweedfs-init:");
+      // The SAME image as the store: `weed shell` talks to the master, so there
+      // is no second image to pin. The old `mc` one-shot was half the MinIO
+      // blast radius -- its repo vanished a day after the server's.
+      lines.push(`    image: chrislusf/seaweedfs@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d`);
+      lines.push("    container_name: jarvis-seaweedfs-init");
       lines.push("    depends_on:");
-      lines.push("      - minio");
+      lines.push("      - seaweedfs");
       lines.push('    entrypoint: ["/bin/sh", "-c"]');
       lines.push("    command:");
       lines.push("      - |");
-      // depends_on only waits for the container to START, so mc gets connection
-      // refused on the first attempt.
+      // depends_on only waits for the container to START, so the first attempt
+      // gets connection refused.
       lines.push(
-        `        until mc alias set local http://minio:9000 "${secrets.minioRootUser}" "${secrets.minioRootPassword}"; do`,
+        '        until echo "s3.bucket.list" | weed shell -master=seaweedfs:9333 >/dev/null 2>&1; do',
       );
       lines.push("          sleep 2");
       lines.push("        done");
       for (const bucket of buckets) {
-        lines.push(`        mc mb --ignore-existing local/${bucket}`);
+        lines.push(
+          `        echo "s3.bucket.create -name ${bucket}" | weed shell -master=seaweedfs:9333`,
+        );
+      }
+      // `s3.bucket.create` EXITS 0 even when it prints "already exists" -- which
+      // also means it exits 0 when it fails. Verify explicitly, or this one-shot
+      // goes green having created nothing.
+      for (const bucket of buckets) {
+        lines.push(
+          `        echo "s3.bucket.list" | weed shell -master=seaweedfs:9333 | grep -q "${bucket}" || { echo "bucket ${bucket} missing after create"; exit 1; }`,
+        );
       }
       lines.push("    networks:");
       lines.push("      - jarvis");

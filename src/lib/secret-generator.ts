@@ -30,13 +30,15 @@ export const SECRET_KEYS = [
   // the persist step (save_memory, transcript mark_processed, inbox delivery)
   // never runs. No 'PASSWORD' in the name -> 32 bytes / 64 hex.
   "JARVIS_ADAPTER_CALLBACK_TOKEN",
-  // MinIO's root credentials. Generated rather than defaulted: minio/minio is
-  // the documented default everyone reaches for, and the console it unlocks is
-  // every uploaded image in the install. The 'user' is an access key, so a
-  // random value is the right shape for it -- both are in the generated .env if
-  // someone needs to sign in to the console.
-  "MINIO_ROOT_USER",
-  "MINIO_ROOT_PASSWORD",
+  // The object store's S3 credentials. Generated rather than defaulted: a
+  // documented default is the one everyone reaches for, and what it unlocks is
+  // every uploaded image in the install. Both are access-key shaped, so a
+  // random value is the right shape for each, and both land in the generated
+  // .env. Named for the role, not the product -- these outlived MinIO once
+  // already (see prds/minio-eol-object-store.md) and should survive the next
+  // store too.
+  "OBJECT_STORE_ACCESS_KEY",
+  "OBJECT_STORE_SECRET_KEY",
   // X-Admin-Secret for the recipes static-data seed endpoints.
   "RECIPES_ADMIN_SECRET",
 ] as const;
