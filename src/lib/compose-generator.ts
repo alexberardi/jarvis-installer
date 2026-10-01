@@ -21,7 +21,7 @@ const FIRST_PARTY_PREFIX = "ghcr.io/alexberardi/";
 //
 // Infra that legitimately serves external clients (mosquitto for remote nodes,
 // grafana dashboards in the browser) is intentionally excluded.
-const DATA_PLANE_INFRA = new Set<string>(["postgres", "redis", "minio", "loki"]);
+const DATA_PLANE_INFRA = new Set<string>(["postgres", "redis", "seaweedfs", "loki"]);
 
 /**
  * Host-side bind prefix for a published port. Data-plane infra defaults to
@@ -218,9 +218,9 @@ export function generateCompose(state: WizardState, registry: ServiceRegistry): 
   for (const inf of infra) {
     lines.push("");
     lines.push(...generateInfraBlock(inf, state));
-    if (inf.id === "minio") {
+    if (inf.id === "seaweedfs") {
       lines.push("");
-      lines.push(...generateMinioInitBlock(allEnabled));
+      lines.push(...generateObjectStoreInitBlock(allEnabled, inf.image));
     }
   }
 
@@ -270,14 +270,26 @@ export function generateCompose(state: WizardState, registry: ServiceRegistry): 
 /**
  * A one-shot that creates the buckets the enabled services asked for.
  *
- * MinIO does NOT create a bucket on first write. Without this the object store
- * runs perfectly and the first upload fails with a config-shaped error, which
- * reads as a broken build rather than a missing bucket -- it is exactly how the
- * recipes photo import failed for days while MinIO sat there healthy.
+ * The S3 API does NOT create a bucket on first write. Without this the object
+ * store runs perfectly and the first upload fails with a config-shaped error,
+ * which reads as a broken build rather than a missing bucket -- it is exactly
+ * how the recipes photo import failed for days while the store sat there
+ * healthy.
  *
- * `mc mb --ignore-existing` is idempotent, so this is safe on every `up`.
+ * Runs the SAME image as the store itself: `weed shell` speaks to the master,
+ * so there is no second image to pin (the old `mc` one-shot was half the
+ * MinIO blast radius -- its Docker Hub repo vanished a day after the server's).
+ *
+ * `s3.bucket.create` on an existing bucket prints "already exists" and STILL
+ * EXITS 0, so the exit code proves nothing either way. That cuts both ways: it
+ * is safe to re-run on every `up`, but a genuine failure would also exit 0.
+ * Hence the explicit `s3.bucket.list` verification -- without it this one-shot
+ * would go green while creating nothing.
  */
-function generateMinioInitBlock(enabled: ServiceDefinition[]): string[] {
+function generateObjectStoreInitBlock(
+  enabled: ServiceDefinition[],
+  image: string,
+): string[] {
   const buckets = [
     ...new Set(
       enabled.map((s) => s.objectStore?.bucket).filter((b): b is string => Boolean(b)),
@@ -285,11 +297,11 @@ function generateMinioInitBlock(enabled: ServiceDefinition[]): string[] {
   ];
 
   return [
-    "  minio-init:",
-    "    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z",
-    "    container_name: jarvis-minio-init",
+    "  seaweedfs-init:",
+    `    image: ${image}`,
+    "    container_name: jarvis-seaweedfs-init",
     "    depends_on:",
-    "      - minio",
+    "      - seaweedfs",
     // A literal block, not a folded scalar wrapping `sh -c "..."`. Folding
     // joins the lines with spaces and the inner quotes then collide with the
     // outer pair, so a credential containing a space or a quote breaks the
@@ -297,13 +309,18 @@ function generateMinioInitBlock(enabled: ServiceDefinition[]): string[] {
     '    entrypoint: ["/bin/sh", "-c"]',
     "    command:",
     "      - |",
-    '        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do',
+    '        until echo "s3.bucket.list" | weed shell -master=seaweedfs:9333 >/dev/null 2>&1; do',
     "          sleep 2",
     "        done",
-    ...buckets.map((b) => `        mc mb --ignore-existing local/${b}`),
-    "    environment:",
-    "      MINIO_ROOT_USER: ${MINIO_ROOT_USER}",
-    "      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}",
+    ...buckets.map(
+      (b) => `        echo "s3.bucket.create -name ${b}" | weed shell -master=seaweedfs:9333`,
+    ),
+    // The verification the exit code cannot give us.
+    ...buckets.map(
+      (b) =>
+        `        echo "s3.bucket.list" | weed shell -master=seaweedfs:9333 | grep -q "${b}" || ` +
+        `{ echo "bucket ${b} missing after create"; exit 1; }`,
+    ),
     "    networks:",
     "      - jarvis",
     // Not unless-stopped: it does its work and exits 0, and a restart policy
@@ -351,9 +368,25 @@ function generateInfraBlock(
   }
 
   // Declared on the infrastructure entry rather than branched on here. Redis
-  // needs one for password auth, MinIO to point the server at its data dir.
+  // needs one for password auth; SeaweedFS needs a shell to materialise its S3
+  // credential file (`-s3.config` takes a path, not env vars) before exec'ing
+  // the server.
+  if (infra.entrypoint) {
+    lines.push(`    entrypoint: ${JSON.stringify(infra.entrypoint)}`);
+  }
   if (infra.command) {
-    lines.push(`    command: ${infra.command}`);
+    if (infra.command.includes("\n")) {
+      // A literal block: a folded scalar would join the lines with spaces and
+      // collapse a shell script into one broken line. Same reason the bucket
+      // one-shot uses one.
+      lines.push("    command:");
+      lines.push("      - |");
+      for (const line of infra.command.split("\n")) {
+        lines.push(`        ${line}`);
+      }
+    } else {
+      lines.push(`    command: ${infra.command}`);
+    }
   }
 
   // Postgres needs healthcheck and init-db mount

@@ -9,7 +9,7 @@ import registryJson from "../../public/service-registry.json";
 const registry = parseRegistry(registryJson);
 
 // Several services are generated with an inline shell script: the config and
-// auth seeds run `python -c '<program>'`, minio-init runs an mc loop, and every
+// auth seeds run `python -c '<program>'`, seaweedfs-init runs a weed-shell loop, and every
 // migrate service gets an alembic-then-exec wrapper. Registry text is
 // interpolated into those, and the seed only escaped DOUBLE quotes -- for the
 // inner Python string -- while a single quote closes the outer SHELL quote and
