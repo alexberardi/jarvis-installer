@@ -42,8 +42,8 @@ interface SecretsMap {
   modelServiceToken: string;
   mqttPassword: string;
   dbUser: string;
-  minioRootUser: string;
-  minioRootPassword: string;
+  objectStoreAccessKey: string;
+  objectStoreSecretKey: string;
 }
 
 /**
@@ -100,8 +100,8 @@ export function generateComposeExport(
     adminApiKey: resolveSecret("ADMIN_API_KEY"),
     grafanaPassword: resolveSecret("GRAFANA_ADMIN_PASSWORD"),
     modelServiceToken: resolveSecret("MODEL_SERVICE_TOKEN"),
-    minioRootUser: resolveSecret("MINIO_ROOT_USER"),
-    minioRootPassword: resolveSecret("MINIO_ROOT_PASSWORD"),
+    objectStoreAccessKey: resolveSecret("OBJECT_STORE_ACCESS_KEY"),
+    objectStoreSecretKey: resolveSecret("OBJECT_STORE_SECRET_KEY"),
     mqttPassword: resolveSecret("MQTT_PASSWORD"),
     dbUser: state.dbUser || "jarvis",
   };
@@ -194,27 +194,51 @@ export function generateComposeExport(
     lines.push("    restart: unless-stopped");
   }
 
-  // MinIO — the object store, for services that hand images between workers by
-  // URI. Emitted here as well as in the SYNC generator: they are separate code
-  // paths over the same registry, and a service depending on infrastructure only
-  // ONE of them knows about produces "depends on undefined service".
-  if (infra.some((i) => i.id === "minio")) {
-    const minioHostPort = state.infraPortOverrides["minio"] ?? 9000;
+  // SeaweedFS — the object store, for services that hand images between workers
+  // by URI. Emitted here as well as in the SYNC generator: they are separate
+  // code paths over the same registry, and a service depending on
+  // infrastructure only ONE of them knows about produces "depends on undefined
+  // service".
+  //
+  // Replaced MinIO 2026-09-30: MinIO archived the OSS project and pulled every
+  // distribution channel (see prds/minio-eol-object-store.md). Pinned by DIGEST
+  // rather than tag -- the 2026-09-11 breakage was an unpinned `:latest`
+  // changing behaviour underneath us, and a digest cannot move at all.
+  if (infra.some((i) => i.id === "seaweedfs")) {
+    const seaweedHostPort = state.infraPortOverrides["seaweedfs"] ?? 8333;
     lines.push("");
-    lines.push("  minio:");
-    lines.push("    image: minio/minio:latest");
-    lines.push("    container_name: jarvis-minio");
+    lines.push("  seaweedfs:");
+    lines.push(`    image: chrislusf/seaweedfs@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d`);
+    lines.push("    container_name: jarvis-seaweedfs");
     lines.push("    ports:");
-    lines.push(`      - "\${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:${minioHostPort}:9000"`);
-    // The console is a login form for every uploaded image in the install; it
-    // gets the same loopback binding as the data port.
-    lines.push(`      - "\${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:${minioHostPort + 1}:9001"`);
-    lines.push("    environment:");
-    lines.push(`      MINIO_ROOT_USER: "${secrets.minioRootUser}"`);
-    lines.push(`      MINIO_ROOT_PASSWORD: "${secrets.minioRootPassword}"`);
-    lines.push('    command: server /data --console-address ":9001"');
+    lines.push(`      - "\${JARVIS_INFRA_BIND_HOST:-127.0.0.1}:${seaweedHostPort}:8333"`);
+    // No second port: SeaweedFS serves no S3 console, so unlike MinIO there is
+    // no extra login surface to bind.
+    lines.push('    entrypoint: ["/bin/sh", "-c"]');
+    lines.push("    command:");
+    lines.push("      - |");
+    // `-s3.config` takes a path, not env vars, so the credential file has to be
+    // written before the server starts. A literal block, not a folded scalar:
+    // folding would join these lines with spaces and collapse the script.
+    lines.push("        mkdir -p /etc/seaweedfs");
+    lines.push("        cat > /etc/seaweedfs/s3.json <<CFG");
+    lines.push(
+      `        {"identities":[{"name":"jarvis","credentials":[{"accessKey":"${secrets.objectStoreAccessKey}","secretKey":"${secrets.objectStoreSecretKey}"}],"actions":["Admin","Read","Write","List","Tagging"]}]}`,
+    );
+    // -volume.max is NOT optional. It defaults to 8, and SeaweedFS makes a
+    // separate volume collection PER BUCKET and grows them 7 at a time, so a
+    // single-node install runs out of volume slots and every PutObject returns
+    // InternalError ("No writable volumes... Not enough data nodes found!").
+    // `-volume.max=0` is worse than it reads: it auto-sizes from free disk
+    // divided by volume size and resolved to 2 in a container. Verified by
+    // migrating a seeded MinIO bucket 2026-10-01 -- 8 of 9 objects failed until
+    // this was set.
+    lines.push("        CFG");
+    lines.push(
+      "        exec weed server -dir=/data -s3 -s3.config=/etc/seaweedfs/s3.json -volume.max=64 -master.volumeSizeLimitMB=1024",
+    );
     lines.push("    volumes:");
-    lines.push(`      - ${storagePath}/minio:/data`);
+    lines.push(`      - ${storagePath}/seaweedfs:/data`);
     lines.push("    networks:");
     lines.push("      - jarvis");
     lines.push("    restart: unless-stopped");
@@ -230,23 +254,36 @@ export function generateComposeExport(
     ];
     if (buckets.length > 0) {
       lines.push("");
-      lines.push("  minio-init:");
-      lines.push("    image: minio/mc:latest");
-      lines.push("    container_name: jarvis-minio-init");
+      lines.push("  seaweedfs-init:");
+      // The SAME image as the store: `weed shell` talks to the master, so there
+      // is no second image to pin. The old `mc` one-shot was half the MinIO
+      // blast radius -- its repo vanished a day after the server's.
+      lines.push(`    image: chrislusf/seaweedfs@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d`);
+      lines.push("    container_name: jarvis-seaweedfs-init");
       lines.push("    depends_on:");
-      lines.push("      - minio");
+      lines.push("      - seaweedfs");
       lines.push('    entrypoint: ["/bin/sh", "-c"]');
       lines.push("    command:");
       lines.push("      - |");
-      // depends_on only waits for the container to START, so mc gets connection
-      // refused on the first attempt.
+      // depends_on only waits for the container to START, so the first attempt
+      // gets connection refused.
       lines.push(
-        `        until mc alias set local http://minio:9000 "${secrets.minioRootUser}" "${secrets.minioRootPassword}"; do`,
+        '        until echo "s3.bucket.list" | weed shell -master=seaweedfs:9333 >/dev/null 2>&1; do',
       );
       lines.push("          sleep 2");
       lines.push("        done");
       for (const bucket of buckets) {
-        lines.push(`        mc mb --ignore-existing local/${bucket}`);
+        lines.push(
+          `        echo "s3.bucket.create -name ${bucket}" | weed shell -master=seaweedfs:9333`,
+        );
+      }
+      // `s3.bucket.create` EXITS 0 even when it prints "already exists" -- which
+      // also means it exits 0 when it fails. Verify explicitly, or this one-shot
+      // goes green having created nothing.
+      for (const bucket of buckets) {
+        lines.push(
+          `        echo "s3.bucket.list" | weed shell -master=seaweedfs:9333 | grep -q "${bucket}" || { echo "bucket ${bucket} missing after create"; exit 1; }`,
+        );
       }
       lines.push("    networks:");
       lines.push("      - jarvis");
@@ -745,24 +782,33 @@ function generateExportServiceBlock(
     for (const line of generateConfigSeedScript(allEnabled, containerPort, state).split("\n")) {
       lines.push(`        ${line}`);
     }
-  } else if (service.id === "jarvis-llm-proxy-api") {
-    // The migrate entrypoint above clears the image CMD, so llm-proxy MUST keep
-    // an explicit command — and it MUST be the image's supervised launcher
-    // scripts/serve.sh (API in the foreground + model service respawned with
-    // backoff), NOT the old unsupervised `uvicorn model_service & exec uvicorn
-    // main` pattern: when the model service crashed natively, nothing respawned
-    // it and the API 503'd forever (2026-07-02 outage). serve.sh defaults
-    // SERVER_PORT=7704 / MODEL_SERVICE_PORT=7705, matching what we publish.
-    lines.push('    command: ["bash", "scripts/serve.sh"]');
   } else if (service.migrate) {
     // Overriding `entrypoint` CLEARS the image's CMD, so a migrate service with
     // no explicit command would `exec ""` (empty $@) and exit right after
-    // migrating — the container restart-loops with no server. Re-emit the
-    // image's serve command so the migrate entrypoint execs it. These services
-    // (command-center, whisper, notifications) all serve `app.main:app`.
-    lines.push(
-      `    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${containerPort}"]`,
+    // migrating — the container restart-loops with no server.
+    //
+    // The command is registry data, never inferred from the service id, because
+    // the module path belongs to the image and the services disagree about it.
+    // llm-proxy's `bash scripts/serve.sh` is its supervised launcher (API in the
+    // foreground + model service respawned with backoff) and MUST NOT become the
+    // old unsupervised `uvicorn model_service & exec uvicorn main`: when the
+    // model service crashed natively nothing respawned it and the API 503'd
+    // forever (2026-07-02 outage). serve.sh defaults SERVER_PORT=7704 /
+    // MODEL_SERVICE_PORT=7705, matching what we publish. jarvis-recipes-server
+    // packages its app at `jarvis_recipes.app.main`; the id-chain this replaces
+    // handed it the generic `app.main:app` and it reached prod crash-looping on
+    // `ModuleNotFoundError: No module named 'app'`.
+    if (!service.serveCommand?.length) {
+      throw new Error(
+        `Service "${service.id}" sets migrate: true but declares no serveCommand. ` +
+          `The migrate entrypoint clears the image CMD, so the container would ` +
+          `exec "" and exit immediately after migrating.`,
+      );
+    }
+    const argv = service.serveCommand.map((arg) =>
+      arg.replace("{{CONTAINER_PORT}}", String(containerPort)),
     );
+    lines.push(`    command: [${argv.map((a) => JSON.stringify(a)).join(", ")}]`);
   }
 
   // Dependencies
@@ -886,6 +932,18 @@ print("Auth seed complete")
 exec uvicorn jarvis_auth.app.main:app --host 0.0.0.0 --port ${authContainerPort}`;
 }
 
+/**
+ * Make a value safe to sit inside a single-quoted shell string.
+ *
+ * `'"'"'` is the standard idiom: close the quote, emit a double-quoted
+ * apostrophe, reopen. Needed because the seed scripts run as
+ * `python -c '<program>'`, where one apostrophe in interpolated registry text
+ * turns the rest of the program into shell.
+ */
+function shellSingleQuoteSafe(value: string): string {
+  return value.replace(/'/g, `'"'"'`);
+}
+
 function generateConfigSeedScript(
   allEnabled: ServiceDefinition[],
   configContainerPort: number,
@@ -902,9 +960,21 @@ function generateConfigSeedScript(
   for (const svc of allEnabled) {
     const cPort = getContainerPort(svc);
     const publishedPort = state.portOverrides[svc.id] ?? svc.port;
-    const desc = svc.description.replace(/"/g, '\\"');
+    // Escape for BOTH layers, in this order. The inner Python string is
+    // double-quoted, so a literal `"` needs escaping there -- but the whole
+    // program runs as `python -c '...'`, so a literal `'` closes the SHELL
+    // quote and everything after it is parsed as shell. A registry description
+    // reading "see the repo's DEPLOYMENT.md" took the config service down with
+    //
+    //   sh: 19: Syntax error: ")" unexpected
+    //
+    // which crash-looped it after migrations succeeded, so the whole stack came
+    // up and then failed discovery. Shell escaping must come last: it emits
+    // double quotes of its own that Python escaping must not touch.
+    const desc = shellSingleQuoteSafe(svc.description.replace(/"/g, '\\"'));
+    const healthPath = shellSingleQuoteSafe(svc.healthCheck);
     serviceLines.push(
-      `    ("${svc.id}", "${svc.id}", ${cPort}, "http", "${svc.healthCheck}", "${desc}", "localhost", ${publishedPort}),`,
+      `    ("${svc.id}", "${svc.id}", ${cPort}, "http", "${healthPath}", "${desc}", "localhost", ${publishedPort}),`,
     );
   }
 
