@@ -1,40 +1,16 @@
 # jarvis-installer
 
-Static React SPA (GitHub Pages) that generates install configurations for the Jarvis voice assistant stack.
+A single static page (GitHub Pages, `installer.jarvisautomation.io`) that shows how to install
+`jarvisd` from [jarvis-server](https://github.com/alexberardi/jarvis-server). See `README.md`
+for the layout.
 
-## Tech Stack
-
-- React 19 + TypeScript, Vite, Vitest + React Testing Library + jsdom
-- Tailwind CSS v4 (via `@tailwindcss/vite` plugin — no config file)
-- JSZip for client-side zip generation
-- React Router for landing page / configurator routing
-
-## Development
-
-```bash
-npm install
-npm run dev       # Start dev server
-npm test          # Run tests
-npm run build     # Production build
-```
-
-## Testing
-
-TDD is required: RED → GREEN → IMPROVE. Target 80%+ coverage.
-
-```bash
-npm test              # Run all tests
-npm run test:watch    # Watch mode
-npm run test:coverage # With coverage
-```
-
-## Project Structure
-
-- `public/service-registry.json` — Source of truth for all Jarvis modules
-- `src/types/` — TypeScript type definitions
-- `src/data/` — Static data (GPU database, model recommendations)
-- `src/lib/` — Pure logic (registry, detection, generators)
-- `src/context/` — React context providers
-- `src/components/` — UI components
-- `tests/` — Test files mirroring src/ structure
-- `install.sh` — Shell script executed by the generated curl command
+- **No build, no npm.** `public/` is published as-is. Keep it plain HTML/CSS plus the small
+  `copy.js`; don't add a framework or bundler.
+- **The installers are not here.** `install.sh` / `install.ps1` live in jarvis-server
+  (`scripts/`) and ship as release assets. The commands on the page must match jarvis-server's
+  README and `docs/install/00-installers.md` §4.1 (download-then-run for `install.sh`, never
+  `curl | sh`).
+- **Check before committing:** `python3 scripts/check-site.py` (well-formed HTML, local links,
+  copy-button targets). It does not fetch external URLs on purpose.
+- **Preview:** `python3 -m http.server -d public 8000`.
+- **Public repo:** no real hostnames, IPs, emails or keys.

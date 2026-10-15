@@ -1,47 +1,49 @@
 # jarvis-installer
 
-A web-based installer/configurator for the [Jarvis](https://github.com/alexberardi) self-hosted voice assistant stack. It's a static React single-page app that walks you through picking which Jarvis services (modules) you want, configuring them, and then generates a ready-to-run Docker Compose deployment you can download and start.
+The install page for [Jarvis](https://github.com/alexberardi/jarvis-server), a private,
+self-hosted voice assistant, served by GitHub Pages at
+[installer.jarvisautomation.io](https://installer.jarvisautomation.io).
 
-It runs entirely in the browser — no backend — and is served from the `installer.jarvisautomation.io` domain.
+It is one static page: the one-line install command for each OS, the supported platforms, what
+to do after the installer finishes, and a pointer for people moving from the legacy Python
+stack. The installers themselves (`install.sh`, `install.ps1`) and everything they install live
+in [jarvis-server](https://github.com/alexberardi/jarvis-server) and are published as release
+assets there; this repository only links to them.
 
-## What it generates
+> Before jarvisd, this repository was a React wizard that generated Docker Compose bundles for the
+> legacy multi-service stack. That stack is replaced by the single `jarvisd` binary, so the
+> wizard is gone; it is in the git history if you need it.
 
-Driven by `public/service-registry.json` (the source of truth for all Jarvis modules), the configurator produces:
+## Layout
 
-- `docker-compose.yml` — the composed stack for your selected services
-- `.env` — environment file with generated secrets and your chosen settings
-- `init-db.sh` — database initialization script for the enabled services
-- a downloadable `jarvis.zip` bundle containing all of the above (plus a generated README)
+| Path | What |
+|---|---|
+| `public/index.html` | The page |
+| `public/style.css`, `public/copy.js` | Styles and the copy buttons |
+| `public/404.html` | Sends any other path (such as the old `/configurator`) to `/` |
+| `public/CNAME` | The custom domain |
+| `public/*.png` | Logo, favicon, Apple touch icon |
+| `scripts/check-site.py` | Checks the HTML is well formed and local links resolve (stdlib Python) |
 
-You can also copy/download just the `docker-compose.yml` directly from the output step.
+## Working on it
 
-## Tech stack
+No build and no dependencies. Serve `public/` and open it:
 
-- React 19 + TypeScript
-- Vite 6 (build/dev server)
-- Tailwind CSS v4 (via `@tailwindcss/vite`, no config file)
-- React Router 7 (landing page `/` + configurator `/configurator`)
-- JSZip (client-side zip bundle generation)
-- Vitest + React Testing Library + jsdom (tests)
-
-Generator logic lives in `src/lib/` (`compose-generator`, `env-generator`, `init-db-generator`, `dependency-resolver`, `service-registry`, `zip-bundle`, etc.).
-
-## Development
-
-```bash
-npm install
-npm run dev        # start the Vite dev server
-npm run build      # type-check (tsc -b) + production build
-npm run preview    # preview the production build
+```sh
+python3 -m http.server -d public 8000
+python3 scripts/check-site.py
 ```
 
-## Testing
+The install commands use `releases/latest/download/…`, which GitHub serves from the newest
+non-prerelease. Keep them in step with jarvis-server's README and
+`docs/install/00-installers.md` §4.1.
 
-```bash
-npm test            # run all tests once (vitest run)
-npm run test:watch  # watch mode
-npm run test:coverage
-```
+## Deploying
+
+A push to `main` runs `.github/workflows/deploy.yml`: it runs the site check, injects the
+Cloudflare Web Analytics beacon if the `VITE_CF_BEACON_TOKEN` repository variable is set (no
+token, no beacon), and publishes `public/` to GitHub Pages. Pull requests run the site check
+only (`check.yml`).
 
 ## License
 
