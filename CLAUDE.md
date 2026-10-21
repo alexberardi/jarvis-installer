@@ -52,3 +52,17 @@ why, when the PR:
 
 Never run a deploy or dispatch a workflow by hand, never merge someone else's PR, never
 force-push to `main`.
+
+## UI work loads the design skills
+
+Any change to how a page looks or behaves (layout, styling, copy, states, motion) loads the three skills in `.claude/skills/` before the first edit: **impeccable** (system rules, commands, the audit checklist), **emil-design-eng** (every motion decision) and **design-taste-frontend** (layout, type and spacing feel). Where they disagree, `.claude/skills/DESIGN-SKILLS.md` decides: accessibility and contrast first, then Impeccable's system rules, Emil for motion, Taste for layout feel.
+
+They are copied unchanged from jarvis-server (`.claude/skills/`, at 1fd33737); change them there through DESIGN-SKILLS.md's process, then copy them here again. They were written for jarvis-server's `web/admin` (React 19, Vite, Tailwind 4, lucide-react); this site is plain HTML/CSS (`site/index.template.html`, `public/style.css`, `public/copy.js`). In this repo read them as:
+
+- **Design system:** direction B ("Quiet Violet", chosen in jarvis-server #331; values in jarvis-server `docs/design/directions/tokens.py`, applied in jarvis-server `web/admin/src/index.css` and in jarvis-docs `docs/assets/stylesheets/theme.css`). This site still has the old dark-indigo variables in `public/style.css`; work that touches the look moves them to B's tokens, light and dark, so the installer, the docs and the admin look like one product. Where a skill says `web/admin/src/...`, read `site/` and `public/`; where it shows Tailwind classes or React components, apply the same rule in plain CSS and HTML.
+- **Mode:** the landing page is a download page: Persuade, held back (`impeccable/reference/mode-persuade.md`): one clear primary action per platform, plain copy, no hero effects.
+- **Taste's dials here:** variance 4, motion 2, density 4.
+- **No libraries:** the site has no dependencies; add no icon, font, animation or component packages (inline SVG where an icon is needed). System font stack; nothing fetched. The opt-in Cloudflare beacon (injected at `<!-- cf-beacon -->` by `deploy.yml` only when a token is configured) stays as it is; add no other tracking.
+- **Rendered check:** there is no `scripts/screenshots` here. Build the page (`python3 scripts/build-site.py --fixture tests/fixtures/releases.json --out _site`) and look at it at phone (390 px), tablet and desktop widths in both themes with the headless browser the runner has; if none is available, say so and list the visual checks under "not verified".
+
+Before a UI PR: run Impeccable's audit (`.claude/skills/impeccable/reference/audit.md`) over the changed pages, fix what it finds, and put its findings report (and the screenshots, if any) in the PR body.
