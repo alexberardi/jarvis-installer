@@ -3,3 +3,8 @@
 
 # Internal product docs — not part of the published tree
 prd/
+
+# Build output and leftovers of the old npm toolchain
+_site/
+node_modules/
+__pycache__/

@@ -1,0 +1,9 @@
+{
+  "name": "jarvis-installer",
+  "private": true,
+  "description": "No dependencies: npm only runs the stdlib Python scripts, so `npm ci && npm test && npm run build` keeps working.",
+  "scripts": {
+    "test": "python3 -m unittest discover tests && python3 scripts/build-site.py --fixture tests/fixtures/releases.json --out _site && python3 scripts/check-site.py _site",
+    "build": "python3 scripts/build-site.py --out _site && python3 scripts/check-site.py _site"
+  }
+}

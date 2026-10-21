@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""Minimal check of the static site in public/: the HTML parses with balanced tags,
-every local href/src points at a file that exists, and copy buttons have a target.
+"""Minimal check of the built site (default _site/, from scripts/build-site.py): the HTML
+parses with balanced tags, every local href/src points at a file that exists, and copy
+buttons have a target.
 
-Standard library only. External links are not fetched: the install URLs use
-releases/latest, which 404s until jarvis-server's first non-prerelease.
+    python3 scripts/check-site.py [DIR]
+
+Standard library only. External links are not fetched (the release asset links are checked
+against the API response by tests/test_build_site.py).
 """
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
 
-SITE = Path(__file__).resolve().parent.parent / "public"
+SITE = Path(__file__).resolve().parent.parent / "_site"
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 
 
@@ -47,7 +50,7 @@ class Checker(HTMLParser):
         self.stack.pop()
 
 
-def check(page: Path) -> list[str]:
+def check(page: Path, site: Path = SITE) -> list[str]:
     c = Checker()
     c.feed(page.read_text(encoding="utf-8"))
     c.close()
@@ -57,7 +60,7 @@ def check(page: Path) -> list[str]:
     for ref in c.refs:
         if ref.startswith(("http://", "https://", "mailto:", "#")):
             continue
-        target = SITE / ref.lstrip("/").split("#")[0].split("?")[0]
+        target = site / ref.lstrip("/").split("#")[0].split("?")[0]
         if target.is_dir():
             target = target / "index.html"
         if not target.is_file():
@@ -68,12 +71,21 @@ def check(page: Path) -> list[str]:
     return errors
 
 
-def main() -> int:
+def check_dir(site: Path) -> list[str]:
     errors: list[str] = []
-    for page in sorted(SITE.glob("*.html")):
-        errors += check(page)
-    if not (SITE / "CNAME").is_file():
-        errors.append("public/CNAME is missing")
+    if not (site / "index.html").is_file():
+        errors.append(f"{site}/index.html is missing (run scripts/build-site.py first)")
+    for page in sorted(site.glob("*.html")):
+        errors += check(page, site)
+    if not (site / "CNAME").is_file():
+        errors.append(f"{site}/CNAME is missing")
+    if "{{" in (site / "index.html").read_text(encoding="utf-8") if (site / "index.html").is_file() else False:
+        errors.append("index.html: a template placeholder was not filled")
+    return errors
+
+
+def main() -> int:
+    errors = check_dir(Path(sys.argv[1]) if len(sys.argv) > 1 else SITE)
     for e in errors:
         print(f"::error::{e}")
     print("site check: ok" if not errors else f"site check: {len(errors)} problem(s)")

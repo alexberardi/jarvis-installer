@@ -1,0 +1,146 @@
+[
+  {
+    "html_url": "https://github.com/alexberardi/jarvis-server/releases/tag/v0.1.0-rc17",
+    "id": 418982443,
+    "tag_name": "v0.1.0-rc17",
+    "name": "jarvisd v0.1.0-rc17",
+    "draft": false,
+    "prerelease": true,
+    "created_at": "2026-10-20T23:20:10Z",
+    "published_at": "2026-10-20T23:30:53Z",
+    "assets": [
+      {
+        "name": "install-agent.sh",
+        "state": "uploaded",
+        "size": 7524,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/install-agent.sh"
+      },
+      {
+        "name": "install-pi.sh",
+        "state": "uploaded",
+        "size": 74795,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/install-pi.sh"
+      },
+      {
+        "name": "install.ps1",
+        "state": "uploaded",
+        "size": 16403,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/install.ps1"
+      },
+      {
+        "name": "install.sh",
+        "state": "uploaded",
+        "size": 23587,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/install.sh"
+      },
+      {
+        "name": "jarvis-agent-v0.1.0-rc17-darwin-arm64.tar.gz",
+        "state": "uploaded",
+        "size": 33818392,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/jarvis-agent-v0.1.0-rc17-darwin-arm64.tar.gz"
+      },
+      {
+        "name": "jarvis-agent-v0.1.0-rc17-linux-amd64.tar.gz",
+        "state": "uploaded",
+        "size": 19573360,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/jarvis-agent-v0.1.0-rc17-linux-amd64.tar.gz"
+      },
+      {
+        "name": "jarvis-agent-v0.1.0-rc17-linux-arm64.tar.gz",
+        "state": "uploaded",
+        "size": 21497906,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/jarvis-agent-v0.1.0-rc17-linux-arm64.tar.gz"
+      },
+      {
+        "name": "jarvis-agent-v0.1.0-rc17-windows-amd64.zip",
+        "state": "uploaded",
+        "size": 7421594,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/jarvis-agent-v0.1.0-rc17-windows-amd64.zip"
+      },
+      {
+        "name": "Jarvis-Automation-Agent-0.1.0-rc17.dmg",
+        "state": "uploaded",
+        "size": 16703835,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/Jarvis-Automation-Agent-0.1.0-rc17.dmg"
+      },
+      {
+        "name": "Jarvis-Automation-Agent-Setup-0.1.0-rc17.exe",
+        "state": "uploaded",
+        "size": 8017929,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/Jarvis-Automation-Agent-Setup-0.1.0-rc17.exe"
+      },
+      {
+        "name": "jarvis-automation-agent_0.1.0-rc17_amd64.deb",
+        "state": "uploaded",
+        "size": 19846452,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/jarvis-automation-agent_0.1.0-rc17_amd64.deb"
+      },
+      {
+        "name": "jarvis-automation-agent_0.1.0-rc17_arm64.deb",
+        "state": "uploaded",
+        "size": 21984350,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/jarvis-automation-agent_0.1.0-rc17_arm64.deb"
+      },
+      {
+        "name": "Jarvis-Automation-Server-0.1.0-rc17.dmg",
+        "state": "uploaded",
+        "size": 26404440,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/Jarvis-Automation-Server-0.1.0-rc17.dmg"
+      },
+      {
+        "name": "Jarvis-Automation-Server-Setup-0.1.0-rc17.exe",
+        "state": "uploaded",
+        "size": 17066834,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/Jarvis-Automation-Server-Setup-0.1.0-rc17.exe"
+      },
+      {
+        "name": "jarvis-automation-server_0.1.0-rc17_amd64.deb",
+        "state": "uploaded",
+        "size": 24642986,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/jarvis-automation-server_0.1.0-rc17_amd64.deb"
+      },
+      {
+        "name": "jarvis-automation-server_0.1.0-rc17_arm64.deb",
+        "state": "uploaded",
+        "size": 26369974,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/jarvis-automation-server_0.1.0-rc17_arm64.deb"
+      },
+      {
+        "name": "jarvisd-v0.1.0-rc17-darwin-arm64.tar.gz",
+        "state": "uploaded",
+        "size": 22592652,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/jarvisd-v0.1.0-rc17-darwin-arm64.tar.gz"
+      },
+      {
+        "name": "jarvisd-v0.1.0-rc17-linux-amd64.tar.gz",
+        "state": "uploaded",
+        "size": 24362117,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/jarvisd-v0.1.0-rc17-linux-amd64.tar.gz"
+      },
+      {
+        "name": "jarvisd-v0.1.0-rc17-linux-arm64.tar.gz",
+        "state": "uploaded",
+        "size": 25824900,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/jarvisd-v0.1.0-rc17-linux-arm64.tar.gz"
+      },
+      {
+        "name": "jarvisd-v0.1.0-rc17-windows-amd64.zip",
+        "state": "uploaded",
+        "size": 22181912,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/jarvisd-v0.1.0-rc17-windows-amd64.zip"
+      },
+      {
+        "name": "SHA256SUMS",
+        "state": "uploaded",
+        "size": 1820,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/SHA256SUMS"
+      },
+      {
+        "name": "SHA256SUMS.minisig",
+        "state": "uploaded",
+        "size": 292,
+        "browser_download_url": "https://github.com/alexberardi/jarvis-server/releases/download/v0.1.0-rc17/SHA256SUMS.minisig"
+      }
+    ]
+  }
+]

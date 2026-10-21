@@ -12,5 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Unit tests
+        run: python3 -m unittest discover tests
+      # The fixture, not the network: a PR's check doesn't depend on what's released today.
+      - name: Build from the fixture
+        run: python3 scripts/build-site.py --fixture tests/fixtures/releases.json --out _site
       - name: HTML structure and local links
-        run: python3 scripts/check-site.py
+        run: python3 scripts/check-site.py _site

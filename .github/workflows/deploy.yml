@@ -1,11 +1,19 @@
 name: Deploy to GitHub Pages
 
-# public/ is the whole site: plain HTML, CSS and images, no build step.
+# scripts/build-site.py renders the page with the newest jarvis-server release baked in
+# (public/ plus site/index.template.html -> _site/). It rebuilds on every push, when
+# jarvis-server announces a release, and daily as a backstop.
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
+  # Fired by jarvis-server's release workflow (wiring that up is a change over there):
+  #   gh api repos/alexberardi/jarvis-installer/dispatches -f event_type=jarvisd-release
+  repository_dispatch:
+    types: [jarvisd-release]
+  schedule:
+    - cron: "17 6 * * *"
 
 permissions:
   contents: read
@@ -21,8 +29,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Unit tests
+        run: python3 -m unittest discover tests
+      - name: Build with the newest release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/build-site.py --out _site
       - name: Check the site
-        run: python3 scripts/check-site.py
+        run: python3 scripts/check-site.py _site
       - name: Add the analytics beacon (only when a token is configured)
         env:
           # Public Cloudflare Web Analytics token (a repo Variable, or a Secret as a
@@ -32,12 +46,12 @@ jobs:
           token="$(printf '%s' "$CF_BEACON_TOKEN" | tr -cd 'A-Za-z0-9')"
           if [ -n "$token" ]; then
             tag="<script defer src=\"https://static.cloudflareinsights.com/beacon.min.js\" data-cf-beacon='{\"token\": \"$token\"}'></script>"
-            sed -i "s|<!-- cf-beacon -->|$tag|" public/index.html
-            grep -q 'data-cf-beacon' public/index.html
+            sed -i "s|<!-- cf-beacon -->|$tag|" _site/index.html
+            grep -q 'data-cf-beacon' _site/index.html
           fi
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: public
+          path: _site
 
   deploy:
     needs: build
