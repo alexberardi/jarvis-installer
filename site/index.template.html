@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Download Jarvis Automation: the server and the desktop agent for Jarvis, a private self-hosted voice assistant.">
-    <meta name="theme-color" content="#0a0a0f">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#f6f6f8" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#111115" media="(prefers-color-scheme: dark)">
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <link rel="stylesheet" href="/style.css">
@@ -15,21 +17,22 @@
     <!-- Rendered by scripts/build-site.py: the placeholders are filled from the newest
          jarvis-server release at build time. Don't edit _site/index.html. -->
     <header class="hero">
-      <div class="glow" aria-hidden="true"></div>
-      <div class="wrap">
-        <img class="logo" src="/jarvis_indigo500_transparent-logo.png" alt="Jarvis">
-        <h1 class="sr-only">Download Jarvis Automation</h1>
-        <p class="tagline">Your personal voice assistant. Private, self-hosted, and open source.</p>
-        <p class="lede">
-          Jarvis Automation runs Jarvis on a computer of yours: one server for the household, no
-          Docker and no database to set up. Download the installer for your OS, run it, and open
-          the setup page.
-        </p>
-        <p class="note">
-          <strong>Pre-release.</strong> Jarvis Automation is in pre-release ({{tag}}): expect rough
-          edges, and expect things to change between releases.
-          <a href="{{release_url}}">Release notes</a>
-        </p>
+      <div class="wrap hero-grid">
+        <img class="logo" src="/jarvis_indigo500_transparent-logo.png" alt="Jarvis logo" width="80" height="96">
+        <div>
+          <h1>Download Jarvis Automation</h1>
+          <p class="tagline">Your personal voice assistant. Private, self-hosted, and open source.</p>
+          <p class="lede">
+            Jarvis Automation runs Jarvis on a computer of yours: one server for the household, no
+            Docker and no database to set up. Download the installer for your OS, run it, and open
+            the setup page.
+          </p>
+          <p class="note">
+            <strong>Pre-release.</strong> Jarvis Automation is in pre-release ({{tag}}): expect rough
+            edges, and expect things to change between releases.
+            <a href="{{release_url}}">Release notes</a>
+          </p>
+        </div>
       </div>
     </header>
 
@@ -38,26 +41,28 @@
         <div class="wrap">
           <h2>Download</h2>
 
-          <div class="os">
-            <h3>Server</h3>
-            <p class="hint">
-              Install it once, on the computer that stays on (a desktop, a mini PC, a home server).
-              It runs Jarvis for everyone in the household.
-            </p>
-            <p class="links">
-              {{server_downloads}}
-            </p>
-          </div>
+          <div class="products">
+            <div class="os server">
+              <h3>Server</h3>
+              <p class="hint">
+                Install it once, on the computer that stays on (a desktop, a mini PC, a home server).
+                It runs Jarvis for everyone in the household.
+              </p>
+              <p class="links">
+                {{server_downloads}}
+              </p>
+            </div>
 
-          <div class="os">
-            <h3>Agent</h3>
-            <p class="hint">
-              The desktop agent, for each person's own computer: talk to Jarvis there and let it
-              work on that computer. It installs for you only, without administrator rights.
-            </p>
-            <p class="links">
-              {{agent_downloads}}
-            </p>
+            <div class="os agent">
+              <h3>Agent</h3>
+              <p class="hint">
+                The desktop agent, for each person's own computer: talk to Jarvis there and let it
+                work on that computer. It installs for you only, without administrator rights.
+              </p>
+              <p class="links">
+                {{agent_downloads}}
+              </p>
+            </div>
           </div>
 
           <p class="hint">
@@ -122,7 +127,7 @@
           <!-- These are the resolved release's own URLs (a published script installs its own
                release). TODO: switch to the latest-release download URLs once a non-prerelease
                exists; see API_URL in scripts/build-site.py. -->
-          <div class="os">
+          <div class="os advanced">
             {{advanced}}
           </div>
         </div>
@@ -152,6 +157,7 @@
       </div>
     </footer>
 
+    <p class="sr-only" id="copy-status" role="status"></p>
     <script src="/copy.js"></script>
   </body>
 </html>

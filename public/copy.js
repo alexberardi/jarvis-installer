@@ -14,9 +14,15 @@
     return ok;
   }
 
+  // The label changes on the button; #copy-status (role="status") says it to screen readers.
   function flash(button, label) {
+    var status = document.getElementById("copy-status");
     button.textContent = label;
-    setTimeout(function () { button.textContent = "Copy"; }, 1500);
+    if (status) status.textContent = label === "Copied" ? "Command copied" : "Could not copy: select the command and copy it";
+    setTimeout(function () {
+      button.textContent = "Copy";
+      if (status) status.textContent = "";
+    }, 1500);
   }
 
   document.querySelectorAll("button[data-copy]").forEach(function (button) {
