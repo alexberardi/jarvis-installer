@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Download Jarvis Automation: the server and the desktop agent for Jarvis, a private self-hosted voice assistant.">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#f6f6f8" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#111115" media="(prefers-color-scheme: dark)">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="stylesheet" href="/style.css">
+    <title>Download Jarvis Automation</title>
+    <!-- cf-beacon -->
+  </head>
+  <body>
+    <!-- Rendered by scripts/build-site.py: the placeholders are filled from the newest
+         jarvis-server release at build time. Don't edit _site/index.html. -->
+    <header class="hero">
+      <div class="wrap hero-grid">
+        <img class="logo" src="/jarvis_indigo500_transparent-logo.png" alt="Jarvis logo" width="80" height="96">
+        <div>
+          <h1>Download Jarvis Automation</h1>
+          <p class="tagline">Your personal voice assistant. Private, self-hosted, and open source.</p>
+          <p class="lede">
+            Jarvis Automation runs Jarvis on a computer of yours: one server for the household, no
+            Docker and no database to set up. Download the installer for your OS, run it, and open
+            the setup page.
+          </p>
+          <p class="note">
+            <strong>Pre-release.</strong> Jarvis Automation is in pre-release ({{tag}}): expect rough
+            edges, and expect things to change between releases.
+            <a href="{{release_url}}">Release notes</a>
+          </p>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="band" id="download">
+        <div class="wrap">
+          <h2>Download</h2>
+
+          <div class="products">
+            <div class="os server">
+              <h3>Server</h3>
+              <p class="hint">
+                Install it once, on the computer that stays on (a desktop, a mini PC, a home server).
+                It runs Jarvis for everyone in the household.
+              </p>
+              <p class="links">
+                {{server_downloads}}
+              </p>
+            </div>
+
+            <div class="os agent">
+              <h3>Agent</h3>
+              <p class="hint">
+                The desktop agent, for each person's own computer: talk to Jarvis there and let it
+                work on that computer. It installs for you only, without administrator rights.
+              </p>
+              <p class="links">
+                {{agent_downloads}}
+              </p>
+            </div>
+          </div>
+
+          <p class="hint">
+            macOS needs Apple silicon (Intel Macs are not supported); Windows needs amd64. A GPU is
+            optional. Other files and older versions are on the
+            <a href="{{releases_url}}">Releases page</a>.
+          </p>
+        </div>
+      </section>
+
+      <section class="band alt" id="next">
+        <div class="wrap">
+          <h2>Then open the setup page</h2>
+          <ol class="steps">
+            <li>
+              <span class="num">1</span>
+              <div>
+                <h3>Open <code>http://&lt;host&gt;:7710/setup</code></h3>
+                <p>
+                  <code>&lt;host&gt;</code> is the computer you installed the server on. The
+                  installer opens the page for you (or prints the link, on a computer without a
+                  screen). Lost it? <code>sudo jarvisd setup-link</code> prints it again.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span class="num">2</span>
+              <div>
+                <h3>Run the setup wizard</h3>
+                <p>
+                  Create the first account, pick your hardware and a model. Nothing large is
+                  downloaded until you choose a model there.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span class="num">3</span>
+              <div>
+                <h3>Chat, and connect the agent, nodes and the app</h3>
+                <p>
+                  The web app stays on port <code>7710</code>: everyone in the household can chat
+                  with Jarvis there, and admins manage the server. {{apps}}
+                </p>
+              </div>
+            </li>
+          </ol>
+          <p class="links">
+            <a class="button" href="{{docs_url}}">Documentation</a>
+            <a class="button ghost" href="{{releases_url}}">Releases</a>
+          </p>
+        </div>
+      </section>
+
+      <section class="band" id="advanced">
+        <div class="wrap">
+          <h2>Advanced: install from a terminal</h2>
+          <p class="hint">
+            The same release ({{tag}}) from the command line: each line downloads the script, then
+            runs it. Prefer to read it first? Run the download on its own, open the script, then run
+            it.
+          </p>
+          <!-- These are the resolved release's own URLs (a published script installs its own
+               release). TODO: switch to the latest-release download URLs once a non-prerelease
+               exists; see API_URL in scripts/build-site.py. -->
+          <div class="os advanced">
+            {{advanced}}
+          </div>
+        </div>
+      </section>
+
+      <section class="band alt" id="legacy">
+        <div class="wrap">
+          <h2>Migrating from the old Docker install?</h2>
+          <p>
+            The Docker (microservice) install is retired for new installs: it no longer installs
+            out of the box. Its docs stay, frozen, in the Legacy section of the documentation.
+            Moving your users, nodes, settings and memories to Jarvis Automation is described in
+            <a href="{{migration_url}}">Migrating from the old Docker install</a>.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap row">
+        <span>Jarvis Automation is open source software (AGPL-3.0).</span>
+        <span>
+          <a href="{{docs_url}}">Docs</a>
+          <a href="https://github.com/alexberardi/jarvis-server">GitHub</a>
+          <a href="https://discord.gg/9SuQFVexxJ">Discord</a>
+        </span>
+      </div>
+    </footer>
+
+    <p class="sr-only" id="copy-status" role="status"></p>
+    <script src="/copy.js"></script>
+  </body>
+</html>

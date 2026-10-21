@@ -1,47 +1,67 @@
 # jarvis-installer
 
-A web-based installer/configurator for the [Jarvis](https://github.com/alexberardi) self-hosted voice assistant stack. It's a static React single-page app that walks you through picking which Jarvis services (modules) you want, configuring them, and then generates a ready-to-run Docker Compose deployment you can download and start.
+The download page for Jarvis Automation, the server and desktop agent of
+[Jarvis](https://github.com/alexberardi/jarvis-server), a private, self-hosted voice
+assistant. GitHub Pages serves it at
+[installer.jarvisautomation.io](https://installer.jarvisautomation.io).
 
-It runs entirely in the browser — no backend — and is served from the `installer.jarvisautomation.io` domain.
+It is one static page: per-OS download buttons for the Server and the Agent (macOS `.dmg`,
+Windows `.exe`, Debian/Ubuntu `.deb` for amd64 and arm64), the terminal one-liners
+(`install.sh`, `install.ps1`, `install-agent.sh`, `install-pi.sh`), the setup step
+(`http://<host>:7710/setup`), and links to the docs at
+[docs.jarvisautomation.dev](https://docs.jarvisautomation.dev/). The installers and everything
+they install live in [jarvis-server](https://github.com/alexberardi/jarvis-server) and are
+published as release assets there; this repository only links to them.
 
-## What it generates
+> Before jarvisd, this repository was a React wizard that generated Docker Compose bundles for the
+> old multi-service stack. That install is retired for new users, so the wizard is gone; it is in
+> the git history if you need it.
 
-Driven by `public/service-registry.json` (the source of truth for all Jarvis modules), the configurator produces:
+## Layout
 
-- `docker-compose.yml` — the composed stack for your selected services
-- `.env` — environment file with generated secrets and your chosen settings
-- `init-db.sh` — database initialization script for the enabled services
-- a downloadable `jarvis.zip` bundle containing all of the above (plus a generated README)
+| Path | What |
+|---|---|
+| `site/index.template.html` | The page, with `{{placeholders}}` for the release |
+| `scripts/build-site.py` | Resolves the newest release and renders `_site/` (stdlib Python) |
+| `scripts/check-site.py` | Checks the built HTML is well formed and local links resolve |
+| `public/style.css`, `public/copy.js` | Styles and the copy buttons |
+| `public/404.html` | Sends any other path (such as the old `/configurator`) to `/` |
+| `public/CNAME` | The custom domain |
+| `public/*.png` | Logo, favicon, Apple touch icon |
+| `tests/` | `unittest` tests and the releases API fixture |
 
-You can also copy/download just the `docker-compose.yml` directly from the output step.
+## How the release is resolved
 
-## Tech stack
+At build time, `scripts/build-site.py` asks the GitHub API for
+`repos/alexberardi/jarvis-server/releases?per_page=1` (the newest release by creation date,
+prereleases included; drafts are skipped) and bakes its tag and assets' `browser_download_url`s
+into the page. Every release so far is a prerelease, and GitHub's `releases/latest` skips those,
+so the page links the resolved tag's own `releases/download/<tag>/…` URLs. Once a
+non-prerelease exists, switch to `releases/latest` (see the TODO at `API_URL`). An asset the
+release lacks gets no button; the Releases page link is always shown.
 
-- React 19 + TypeScript
-- Vite 6 (build/dev server)
-- Tailwind CSS v4 (via `@tailwindcss/vite`, no config file)
-- React Router 7 (landing page `/` + configurator `/configurator`)
-- JSZip (client-side zip bundle generation)
-- Vitest + React Testing Library + jsdom (tests)
+## Working on it
 
-Generator logic lives in `src/lib/` (`compose-generator`, `env-generator`, `init-db-generator`, `dependency-resolver`, `service-registry`, `zip-bundle`, etc.).
+No dependencies. Test, build from the fixture, check, and preview:
 
-## Development
-
-```bash
-npm install
-npm run dev        # start the Vite dev server
-npm run build      # type-check (tsc -b) + production build
-npm run preview    # preview the production build
+```sh
+python3 -m unittest discover tests
+python3 scripts/build-site.py --fixture tests/fixtures/releases.json --out _site
+python3 scripts/check-site.py _site
+python3 -m http.server -d _site 8000
 ```
 
-## Testing
+Without `--fixture` the build uses the live API (set `GITHUB_TOKEN` to avoid rate limits).
+`npm test` and `npm run build` run the same scripts.
 
-```bash
-npm test            # run all tests once (vitest run)
-npm run test:watch  # watch mode
-npm run test:coverage
-```
+## Deploying
+
+`.github/workflows/deploy.yml` runs on a push to `main`, on a `jarvisd-release`
+repository_dispatch (sent by jarvis-server's release workflow), daily, and by hand. It runs the
+tests, builds against the newest release, checks the result, injects the Cloudflare Web
+Analytics beacon if the `VITE_CF_BEACON_TOKEN` repository variable is set (no token, no
+beacon), and publishes `_site/` to GitHub Pages. Pull requests run the tests and a fixture
+build (`check.yml`).
 
 ## License
 

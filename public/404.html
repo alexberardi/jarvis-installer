@@ -1,16 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <title>Jarvis Installer</title>
-    <script>
-      // SPA routing for GitHub Pages: served at root of custom domain.
-      // Bounce 404s to / with the original path stashed in ?redirect=.
-      var route = window.location.pathname || '/';
-      window.location.replace(
-        window.location.origin + '/?redirect=' + encodeURIComponent(route + window.location.search + window.location.hash)
-      );
-    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="0; url=/">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <title>Install Jarvis</title>
   </head>
-  <body></body>
+  <body>
+    <!-- Old wizard links (/configurator, …) land here; there is only one page now. -->
+    <p><a href="/">Go to the Jarvis install page</a>.</p>
+  </body>
 </html>

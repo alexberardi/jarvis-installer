@@ -1,43 +1,9 @@
 {
   "name": "jarvis-installer",
   "private": true,
-  "version": "0.1.0",
-  "type": "module",
+  "description": "No dependencies: npm only runs the stdlib Python scripts, so `npm ci && npm test && npm run build` keeps working.",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
-  },
-  "dependencies": {
-    "bcryptjs": "^3.0.3",
-    "clsx": "^2.1.1",
-    "jszip": "^3.10.2",
-    "lucide-react": "^1.51.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "react-router": "^8.4.0",
-    "tailwind-merge": "^3.7.0"
-  },
-  "devDependencies": {
-    "@tailwindcss/vite": "^4.3.3",
-    "@testing-library/dom": "^10.4.2",
-    "@testing-library/jest-dom": "^7.0.1",
-    "@testing-library/react": "^16.3.3",
-    "@testing-library/user-event": "^14.6.7",
-    "@types/bcryptjs": "^3.0.0",
-    "@types/node": "^26.6.4",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.1",
-    "jsdom": "^30.0.1",
-    "tailwindcss": "^4.0.0",
-    "tsx": "^4.23.15",
-    "typescript": "~6.0.3",
-    "vite": "^8.3.2",
-    "vitest": "^4.1.10",
-    "yaml": "^2.9.1"
+    "test": "python3 -m unittest discover tests && python3 scripts/build-site.py --fixture tests/fixtures/releases.json --out _site && python3 scripts/check-site.py _site",
+    "build": "python3 scripts/build-site.py --out _site && python3 scripts/check-site.py _site"
   }
 }
