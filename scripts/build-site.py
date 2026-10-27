@@ -29,7 +29,8 @@ RELEASES_URL = f"https://github.com/{REPO}/releases"
 # prerelease, and GitHub's releases/latest skips those (it 404s today).
 # TODO: switch to releases/latest (api .../releases/latest, and releases/latest/download/... in
 # the page) once jarvis-server publishes a non-prerelease.
-API_URL = f"https://api.github.com/repos/{REPO}/releases?per_page=1"
+# The API's list isn't newest-first (it put rc18.9 above rc18.10), so take a page and pick.
+API_URL = f"https://api.github.com/repos/{REPO}/releases?per_page=30"
 
 DOCS_URL = "https://docs.jarvisautomation.dev/"
 # Planned page (jarvis-docs #381); it doesn't exist yet.
@@ -70,7 +71,7 @@ def resolve(releases: list[dict]) -> Release:
     published = [r for r in releases if not r.get("draft")]
     if not published:
         raise BuildError("no published jarvis-server release")
-    r = published[0]
+    r = max(published, key=lambda r: r.get("created_at") or "")
     tag = r["tag_name"]
     version = tag[1:] if tag.startswith("v") else tag
     uploaded = {a["name"]: a["browser_download_url"] for a in r.get("assets", []) if a.get("state", "uploaded") == "uploaded"}

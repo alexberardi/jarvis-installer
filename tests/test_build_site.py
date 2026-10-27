@@ -71,6 +71,14 @@ class ResolveRelease(unittest.TestCase):
         rel = build_site.resolve([draft] + releases)
         self.assertEqual(rel.tag, "v0.1.0-rc17")
 
+    def test_newest_by_creation_not_list_order(self) -> None:
+        # GitHub listed v0.1.0-rc18.9 above rc18.10, created two hours later (2026-10-26).
+        older = copy.deepcopy(load_fixture()[0])
+        older.update(tag_name="v0.1.0-rc18.9", created_at="2026-10-27T00:14:06Z")
+        newer = copy.deepcopy(load_fixture()[0])
+        newer.update(tag_name="v0.1.0-rc18.10", created_at="2026-10-27T02:00:50Z")
+        self.assertEqual(build_site.resolve([older, newer]).tag, "v0.1.0-rc18.10")
+
     def test_no_release_fails(self) -> None:
         with self.assertRaises(build_site.BuildError):
             build_site.resolve([])
