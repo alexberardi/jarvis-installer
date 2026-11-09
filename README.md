@@ -25,6 +25,7 @@ published as release assets there; this repository only links to them.
 | `scripts/build-site.py` | Resolves the newest release and renders `_site/` (stdlib Python) |
 | `scripts/check-site.py` | Checks the built HTML is well formed and local links resolve |
 | `public/style.css`, `public/copy.js` | Styles and the copy buttons |
+| `public/overview-video.js`, `public/overview.jpg` | Local demo poster; loads the YouTube player only on activation, with a direct link as fallback |
 | `public/404.html` | Sends any other path (such as the old `/configurator`) to `/` |
 | `public/CNAME` | The custom domain |
 | `public/*.png` | Logo, favicon, Apple touch icon |
